@@ -1,0 +1,12 @@
+[package]
+name = "mountsandbox"
+version = "0.1.0"
+edition = "2021"
+description = "Rust FFI bindings for libmountsandbox"
+
+[dependencies]
+libc = "0.2"
+
+[lib]
+name = "mountsandbox"
+path = "src/lib.rs"

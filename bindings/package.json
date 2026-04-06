@@ -1,0 +1,17 @@
+{
+  "name": "libmountsandbox-bindings",
+  "version": "0.1.0",
+  "description": "TypeScript bindings for libmountsandbox",
+  "main": "sandbox.ts",
+  "scripts": {
+    "test": "ts-node test_bindings.ts"
+  },
+  "dependencies": {
+    "koffi": "^2.8.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+}

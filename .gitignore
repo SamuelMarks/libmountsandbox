@@ -1,0 +1,366 @@
+implement_*
+# ==========================================
+# Extensive .gitignore for libmountsandbox
+# ==========================================
+
+# ------------------------------------------
+# C / C++ / Native
+# ------------------------------------------
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.ipa
+*.dSYM/
+*.pdb
+*.idb
+*.ilk
+*.exp
+*.appx
+
+# Core dumps
+core
+core.*
+*.core
+
+# ------------------------------------------
+# Build Systems (CMake / Make / Ninja)
+# ------------------------------------------
+/build/
+/build-*/
+/out/
+/bin/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+_CPack_Packages/
+build.ninja
+.ninja_deps
+.ninja_log
+
+# ------------------------------------------
+# Python (Bindings & Scripts)
+# ------------------------------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.nox/
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Mypy / Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# ------------------------------------------
+# Node.js / TypeScript (Bindings)
+# ------------------------------------------
+/bindings/node_modules/
+node_modules/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Caches
+.npm/
+.yarn/
+.eslintcache
+.stylelintcache
+.tsbuildinfo
+
+# ------------------------------------------
+# Go (Bindings)
+# ------------------------------------------
+/bindings/vendor/
+*.exe~
+*.test
+go.work
+go.work.sum
+
+# ------------------------------------------
+# C# / .NET (Bindings)
+# ------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+TestResults/
+*.user
+*.userprefs
+*.vspscc
+*.vssscc
+*.suo
+*.DotSettings.user
+
+# ------------------------------------------
+# Rust / Cargo (Bindings)
+# ------------------------------------------
+/bindings/rust/target/
+**/*.rs.bk
+Cargo.lock
+
+# ------------------------------------------
+# Kotlin / Gradle / Java (Bindings)
+# ------------------------------------------
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+.kotlin/
+.kotlin_module
+
+# IntelliJ IDEA / Eclipse
+*.iml
+*.iws
+.idea/
+.classpath
+.project
+.settings/
+
+# Properties
+local.properties
+
+# ------------------------------------------
+# Swift / SPM (Bindings)
+# ------------------------------------------
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+# ------------------------------------------
+# Ruby (Bindings)
+# ------------------------------------------
+*.gem
+*.rbc
+/.config
+/coverage/
+/InstalledFiles
+/pkg/
+/spec/reports/
+/spec/examples.txt
+/test/tmp/
+/test/version_tmp/
+/tmp/
+.bundle/
+vendor/bundle
+lib/bundler/man/
+
+# ------------------------------------------
+# Coverage and testing
+# ------------------------------------------
+*.gcda
+*.gcno
+*.gcov
+coverage.info
+coverage.out
+coverage_html/
+Testing/
+TestResults/
+
+# ------------------------------------------
+# Logs and Databases
+# ------------------------------------------
+*.log
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+
+# ------------------------------------------
+# Archives
+# ------------------------------------------
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+*.bz2
+*.xz
+
+# ------------------------------------------
+# OS / System Files
+# ------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ------------------------------------------
+# Editors and IDEs
+# ------------------------------------------
+# Visual Studio / VS Code
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+*.userosscache
+*.sln.docstates
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-workspace
+
+# ------------------------------------------
+# Miscellaneous / Scripts
+# ------------------------------------------
+*.bak
+*.tmp
+*.orig
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary setup / CLI specific files
+fix_*.py
+update_*.py
+test_c
+test_c.c
+revert.c
+test_swift
+test_env.sh
+CMakeLists.txt.bak
+src/sandbox.h.bak
