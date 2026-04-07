@@ -11,9 +11,9 @@ def main
              end
   
   # Resolve relative to current file
-  lib_path = File.join(File.dirname(__FILE__), "..", "build", lib_name)
+  lib_path = File.expand_path(File.join(File.dirname(__FILE__), "..", "build", lib_name))
   
-  # Try to execute ls
+  # Try to execute dummy
   sandbox = LibMountSandbox::SandboxWrapper.new(lib_path)
   
   status = sandbox.execute("dummy", ["echo", "hello"])

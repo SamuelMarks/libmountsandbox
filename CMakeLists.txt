@@ -33,7 +33,7 @@ target_link_libraries(sandbox_lib PRIVATE cfs)
 
 # Create shared library for FFI bindings
 add_library(sandbox_lib_shared SHARED ${SANDBOX_SOURCES})
-set_target_properties(sandbox_lib_shared PROPERTIES OUTPUT_NAME "mountsandbox")
+set_target_properties(sandbox_lib_shared PROPERTIES OUTPUT_NAME "mountsandbox" WINDOWS_EXPORT_ALL_SYMBOLS ON)
 target_link_libraries(sandbox_lib_shared PRIVATE cfs)
 
 # Add main executable

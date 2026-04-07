@@ -69,6 +69,10 @@ module LibMountSandbox
     def initialize(lib_path = nil)
       @lib_path = LibMountSandbox.resolve_lib_path(lib_path)
       
+      if RbConfig::CONFIG['host_os'] =~ /mswin|msys|mingw|cygwin|bccwin|wince|emc/
+        ENV['PATH'] = "#{File.dirname(@lib_path)};#{ENV['PATH']}"
+      end
+      
       # We load the library into an anonymous module to isolate state if needed,
       # but FFI::Library is typically used at the module level.
       # To match the Python API, we do it here:

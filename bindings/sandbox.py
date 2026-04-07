@@ -37,6 +37,9 @@ class SandboxEngine(Structure):
         ("description", c_char_p),
         ("init", c_void_p),
         ("execute", c_void_p),
+        ("execute_async", c_void_p),
+        ("wait_process", c_void_p),
+        ("free_process", c_void_p),
         ("cleanup", c_void_p)
     ]
 
