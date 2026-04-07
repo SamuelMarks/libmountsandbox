@@ -22,6 +22,7 @@ include(FetchContent)
 FetchContent_Declare(
     c_fs
     URL https://github.com/SamuelMarks/c-fs/archive/refs/heads/master.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(c_fs)
 

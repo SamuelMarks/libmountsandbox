@@ -40,8 +40,20 @@ class SandboxEngine(Structure):
         ("cleanup", c_void_p)
     ]
 
+import sys
+import os
+
 class LibMountSandbox:
-    def __init__(self, lib_path="./build/libmountsandbox.so"):
+    def __init__(self, lib_path=None):
+        if lib_path is None:
+            if sys.platform == 'darwin':
+                lib_name = 'libmountsandbox.dylib'
+            elif sys.platform == 'win32' or sys.platform == 'cygwin':
+                lib_name = 'mountsandbox.dll'
+            else:
+                lib_name = 'libmountsandbox.so'
+            lib_path = os.path.join(".", "build", lib_name)
+        
         self.lib = CDLL(lib_path)
         
         self.lib.get_sandbox_engine.argtypes = [c_char_p, POINTER(POINTER(SandboxEngine))]

@@ -1,11 +1,15 @@
 require 'minitest/autorun'
+require 'rbconfig'
 require_relative 'sandbox'
 
 class TestRubyBindings < Minitest::Test
   def setup
-    @lib_path = File.join(File.dirname(__FILE__), "..", "build", (RUBY_PLATFORM =~ /darwin/ ? "libmountsandbox.dylib" : "libmountsandbox.so"))
-    # For CI/CD or other platforms, we might need a fallback, but resolve_lib_path handles it if we pass nil.
-    # However, since we built it here locally, we can just pass nil and let it resolve.
+    lib_name = case RbConfig::CONFIG['host_os']
+               when /darwin/ then 'libmountsandbox.dylib'
+               when /mswin|msys|mingw|cygwin|bccwin|wince|emc/ then 'mountsandbox.dll'
+               else 'libmountsandbox.so'
+               end
+    @lib_path = File.join(File.dirname(__FILE__), "..", "build", lib_name)
     @sandbox = LibMountSandbox::SandboxWrapper.new(nil)
   end
 

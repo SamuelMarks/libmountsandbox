@@ -9,13 +9,36 @@
  * This engine maps the execution of a command into a native OS sandboxing
  * facility (e.g., sandbox-exec on macOS, bwrap/namespaces on Linux).
  */
-
 /* clang-format off */
 #include "sandbox.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+
+#if defined(__APPLE__) || defined(__linux__)
+#include <signal.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
+#if defined(__APPLE__)
+#include <sys/param.h>
+#endif
+
+#if defined(__linux__)
+#include <limits.h>
+#endif
+
+#if defined(_WIN32)
+#include <io.h>
+#include <winsock2.h>
+#endif
+/* clang-format on */
+
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /**
@@ -49,20 +72,12 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
 
 #if defined(__APPLE__) || defined(__linux__)
 #define _XOPEN_SOURCE 600
-#include <stdlib.h>
 #endif
 
 #if defined(__APPLE__)
 /* ========================================================================= */
 /* macOS App Sandbox (sandbox-exec) Implementation                           */
 /* ========================================================================= */
-#include <signal.h>
-#include <sys/param.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 1024
@@ -430,13 +445,6 @@ static int native_execute(const sandbox_config_t *config, int argc,
 /* ========================================================================= */
 /* Linux Namespaces (Bubblewrap) Implementation                              */
 /* ========================================================================= */
-#include <limits.h>
-#include <signal.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -729,11 +737,7 @@ static int native_execute(const sandbox_config_t *config, int argc,
 /* ========================================================================= */
 /* Windows Job Objects Implementation                                        */
 /* ========================================================================= */
-#include <io.h>
-#include <stdio.h>
-#include <winsock2.h>
 
-/* clang-format on */
 /**
  * \brief Initializes the engine.
  * \return 0 on success, or -1 on error.

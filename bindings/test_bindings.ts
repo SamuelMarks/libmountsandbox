@@ -1,11 +1,19 @@
 import { LibMountSandbox, SandboxConfig } from './sandbox';
 import koffi from 'koffi';
 import * as path from 'path';
+import * as os from 'os';
 
 function main() {
     console.log("Testing TypeScript FFI Bindings...");
     
-    const libPath = path.resolve(__dirname, "../build/libmountsandbox.so");
+    let libName = 'libmountsandbox.so';
+    if (os.platform() === 'darwin') {
+        libName = 'libmountsandbox.dylib';
+    } else if (os.platform() === 'win32') {
+        libName = 'mountsandbox.dll';
+    }
+    
+    const libPath = path.resolve(__dirname, "..", "build", libName);
     const sandbox = new LibMountSandbox(libPath);
     
     // Test 1: Dummy engine
