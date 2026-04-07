@@ -18,6 +18,7 @@
 
 #if defined(__APPLE__) || defined(__linux__)
 #include <signal.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -469,7 +470,6 @@ static int native_execute(const sandbox_config_t *config, int argc,
                           char **argv) {
   char **exec_argv;
   int i, status = -1;
-  char abs_path[PATH_MAX];
   pid_t pid;
   int master_fd = -1;
   int current_arg = 0;

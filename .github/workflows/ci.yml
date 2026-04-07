@@ -50,6 +50,12 @@ jobs:
       with:
         swift-version: "5.10"
 
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.2'
+        bundler-cache: false
+
     - name: Build C Library
       run: |
         mkdir build
@@ -71,7 +77,7 @@ jobs:
         DYLD_LIBRARY_PATH: ${{ github.workspace }}/build
       run: |
         cd bindings
-        sudo gem install minitest ffi || gem install minitest ffi --user-install
+        gem install minitest ffi
         ruby test_ruby.rb
         ruby test_bindings.rb
 

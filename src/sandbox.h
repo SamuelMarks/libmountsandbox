@@ -211,5 +211,5 @@ extern sandbox_engine_t engine_native;
 
 #ifdef __cplusplus
 }
-#endif
+#endif /* __cplusplus */
 #endif /* SANDBOX_H */
