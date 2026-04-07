@@ -58,3 +58,6 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 add_test(NAME test_sandbox COMMAND test_sandbox)
+add_test(NAME test_cli_help COMMAND mountsandbox --help)
+add_test(NAME test_cli_version COMMAND mountsandbox --version)
+add_test(NAME test_cli_dummy COMMAND mountsandbox --engine=dummy -- echo hello)

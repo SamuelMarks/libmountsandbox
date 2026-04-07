@@ -445,10 +445,6 @@ static int docker_execute(const sandbox_config_t *config, int argc,
 }
 
 /**
- * \brief Cleans up Docker engine resources.
- */
-
-/**
  * \brief Executes a command in the sandbox asynchronously.
  * \param config Sandbox configuration.
  * \param argc Argument count.
