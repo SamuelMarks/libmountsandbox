@@ -61,3 +61,5 @@ add_test(NAME test_sandbox COMMAND test_sandbox)
 add_test(NAME test_cli_help COMMAND mountsandbox --help)
 add_test(NAME test_cli_version COMMAND mountsandbox --version)
 add_test(NAME test_cli_dummy COMMAND mountsandbox --engine=dummy -- echo hello)
+add_test(NAME test_cli_all_options COMMAND mountsandbox --engine=dummy --no-network --env=A=B --mount=/tmp --ro-mount=/var --timeout=10 --memory-mb=100 --cpu-pct=50 --drop-privs --uid=1000 --gid=1000 --deny-syscall=ptrace -- echo tested)
+

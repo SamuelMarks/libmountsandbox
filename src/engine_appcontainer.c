@@ -24,8 +24,14 @@ typedef HRESULT(WINAPI *CreateAppContainerProfile_t)(PCWSTR, PCWSTR, PCWSTR,
                                                      const void *, DWORD,
                                                      PSID *);
 typedef HRESULT(WINAPI *DeleteAppContainerProfile_t)(PCWSTR);
+/**
+ * \brief Function pointer typedef for InitializeProcThreadAttributeList
+ */
 typedef BOOL(WINAPI *InitializeProcThreadAttributeList_t)(LPVOID, DWORD, DWORD,
                                                           PSIZE_T);
+/**
+ * \brief Function pointer typedef for UpdateProcThreadAttribute
+ */
 typedef BOOL(WINAPI *UpdateProcThreadAttribute_t)(LPVOID, DWORD, DWORD_PTR,
                                                   PVOID, SIZE_T, PVOID,
                                                   PSIZE_T);
@@ -381,6 +387,12 @@ static int appcontainer_execute_async(const sandbox_config_t *config, int argc,
   return -1;
 }
 
+/**
+ * \brief Waits for an asynchronously executing sandboxed process to complete.
+ * \param process The process handle.
+ * \param exit_status Pointer to receive the exit status.
+ * \return 0 on success, or -1 on error.
+ */
 static int appcontainer_wait_process(sandbox_process_t *process,
                                      int *exit_status) {
   (void)process;
