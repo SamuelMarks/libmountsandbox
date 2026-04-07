@@ -18,13 +18,22 @@ set(SANDBOX_SOURCES
     src/engine_native.c
 )
 
+include(FetchContent)
+FetchContent_Declare(
+    c_fs
+    URL https://github.com/SamuelMarks/c-fs/archive/refs/heads/master.zip
+)
+FetchContent_MakeAvailable(c_fs)
+
 # Create static library for reusability across main and tests
 add_library(sandbox_lib STATIC ${SANDBOX_SOURCES})
-set_target_properties(sandbox_lib PROPERTIES OUTPUT_NAME "mountsandbox")
+set_target_properties(sandbox_lib PROPERTIES OUTPUT_NAME "mountsandbox_static")
+target_link_libraries(sandbox_lib PRIVATE cfs)
 
 # Create shared library for FFI bindings
 add_library(sandbox_lib_shared SHARED ${SANDBOX_SOURCES})
 set_target_properties(sandbox_lib_shared PROPERTIES OUTPUT_NAME "mountsandbox")
+target_link_libraries(sandbox_lib_shared PRIVATE cfs)
 
 # Add main executable
 add_executable(mountsandbox src/main.c)
