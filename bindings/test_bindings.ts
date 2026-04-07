@@ -50,7 +50,11 @@ function main() {
             target_uid: 0,
             target_gid: 0,
             denied_syscalls: null,
-            denied_syscall_count: 0
+            denied_syscall_count: 0,
+            seccomp_profile_path: null,
+            apparmor_profile: null,
+            use_pty: 0,
+            max_network_mbps: 0
         };
 
         const statusNative = sandbox.execute("native", ["echo", "hello"], config);

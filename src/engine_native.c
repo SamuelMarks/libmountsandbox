@@ -192,7 +192,7 @@ static int native_execute(const sandbox_config_t *config, int argc,
   }
 
 #if defined(_MSC_VER)
-  strcpy_s(profile, sizeof(profile), profile_template_base);
+  strcpy_s(profile, profile_len, profile_template_base);
 #else
   strcpy(profile, profile_template_base);
 #endif
