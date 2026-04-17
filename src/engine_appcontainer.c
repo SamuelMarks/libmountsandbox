@@ -10,6 +10,8 @@
 
 /* clang-format off */
 #include "sandbox.h"
+#include "log.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,9 +67,12 @@ typedef struct _MSB_STARTUPINFOEXA {
  * \return 0 on success, or -1 on error.
  */
 static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
+  int rc = 0;
   long fsize;
-  if (!fp || !buf || !size)
-    return -1;
+  if (!fp || !buf || !size) {
+    rc = -1;
+    return rc;
+  }
   fseek(fp, 0, SEEK_END);
   fsize = ftell(fp);
   rewind(fp);
@@ -78,10 +83,14 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
     size_t read_bytes = fread(*buf, 1, (size_t)fsize, fp);
     (*buf)[read_bytes] = '\0';
     *size = read_bytes;
-    return 0;
+    {
+      rc = 0;
+      return rc;
+    }
   } else {
     *size = 0;
-    return -1;
+    rc = -1;
+    return rc;
   }
 }
 
@@ -89,7 +98,10 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
  * \brief Initializes the engine.
  * \return 0 on success, or -1 on error.
  */
-static int appcontainer_init(void) { return 0; }
+static int appcontainer_init(void) {
+  int rc = 0;
+  return rc;
+}
 
 /**
  * \brief Executes a command in the sandbox synchronously.
@@ -99,7 +111,8 @@ static int appcontainer_init(void) { return 0; }
  * \return Exit status, or -1 on error.
  */
 static int appcontainer_execute(const sandbox_config_t *config, int argc,
-                                char **argv) {
+                                char **argv, int *exit_status) {
+  int rc = 0;
   HMODULE hUserEnv = LoadLibraryA("userenv.dll");
   HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
 
@@ -130,7 +143,10 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
   if (!config || !argv) {
     if (hUserEnv)
       FreeLibrary(hUserEnv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   if (hUserEnv) {
@@ -155,7 +171,10 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
                     "version of Windows.\n");
     if (hUserEnv)
       FreeLibrary(hUserEnv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
 #if defined(_MSC_VER)
@@ -190,7 +209,10 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
   if (!cmdline) {
     if (hUserEnv)
       FreeLibrary(hUserEnv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
   cmdline[0] = '\0';
   for (i = 0; i < argc; i++) {
@@ -224,7 +246,10 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
     free(cmdline);
     if (hUserEnv)
       FreeLibrary(hUserEnv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   memset(&sc, 0, sizeof(sc));
@@ -246,7 +271,10 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
     free(cmdline);
     if (hUserEnv)
       FreeLibrary(hUserEnv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   if (!pUpdateProcThreadAttribute(siex.lpAttributeList, 0,
@@ -261,7 +289,10 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
     free(cmdline);
     if (hUserEnv)
       FreeLibrary(hUserEnv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   if (out_fp || err_fp) {
@@ -338,14 +369,25 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
   if (hUserEnv)
     FreeLibrary(hUserEnv);
 
-  return status;
+  if (status == -1) {
+    rc = -1;
+    if (errno != 0)
+      LOG_DEBUG("Execute failed: %s", strerror(errno));
+  } else {
+    if (exit_status)
+      *exit_status = status;
+  }
+  return rc;
 }
 
 #else
 /* ========================================================================= */
 /* Unsupported Platform Stub                                                 */
 /* ========================================================================= */
-static int appcontainer_init(void) { return 0; }
+static int appcontainer_init(void) {
+  int rc = 0;
+  return rc;
+}
 
 /**
  * \brief Executes a command in the sandbox synchronously.
@@ -355,14 +397,18 @@ static int appcontainer_init(void) { return 0; }
  * \return Exit status, or -1 on error.
  */
 static int appcontainer_execute(const sandbox_config_t *config, int argc,
-                                char **argv) {
+                                char **argv, int *exit_status) {
+  int rc = 0;
   (void)config;
   (void)argc;
   (void)argv;
   fprintf(
       stderr,
       "[libmountsandbox] AppContainer sandbox is only supported on Windows.\n");
-  return -1;
+  {
+    rc = -1;
+    return rc;
+  }
 }
 #endif
 
@@ -377,6 +423,7 @@ static int appcontainer_execute(const sandbox_config_t *config, int argc,
 static int appcontainer_execute_async(const sandbox_config_t *config, int argc,
                                       char **argv,
                                       sandbox_process_t **out_process) {
+  int rc = 0;
   (void)config;
   (void)argc;
   (void)argv;
@@ -384,7 +431,10 @@ static int appcontainer_execute_async(const sandbox_config_t *config, int argc,
                   "appcontainer. Falling back to sync.\n");
   if (out_process)
     *out_process = NULL;
-  return -1;
+  {
+    rc = -1;
+    return rc;
+  }
 }
 
 /**
@@ -395,9 +445,13 @@ static int appcontainer_execute_async(const sandbox_config_t *config, int argc,
  */
 static int appcontainer_wait_process(sandbox_process_t *process,
                                      int *exit_status) {
+  int rc = 0;
   (void)process;
   (void)exit_status;
-  return -1;
+  {
+    rc = -1;
+    return rc;
+  }
 }
 
 /**

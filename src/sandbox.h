@@ -140,9 +140,11 @@ typedef struct {
    * \param config The sandbox configuration parameters.
    * \param argc The number of command arguments.
    * \param argv The array of command arguments.
-   * \return The exit status of the executed command, or -1 on system error.
+   * \param exit_status Pointer to an integer to receive the exit status.
+   * \return 0 on success, or -1 on system error.
    */
-  int (*execute)(const sandbox_config_t *config, int argc, char **argv);
+  int (*execute)(const sandbox_config_t *config, int argc, char **argv,
+                 int *exit_status);
 
   /**
    * \brief Executes a command asynchronously within the sandboxed environment.
@@ -180,7 +182,8 @@ typedef struct {
 /**
  * \brief Retrieves a sandbox engine instance by its short name.
  * \param name The string name of the engine to retrieve.
- * \return Pointer to the engine, or NULL if the engine is not found.
+ * \param engine_out Pointer to a sandbox_engine_t pointer to receive the result.
+ * \return 0 on success, or -1 if the engine is not found.
  */
 int get_sandbox_engine(const char *name, sandbox_engine_t **engine_out);
 

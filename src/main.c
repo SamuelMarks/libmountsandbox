@@ -441,7 +441,7 @@ int main(int argc, char **argv) {
   printf("\n");
 
   /* Execute the sub-command via the selected engine */
-  status = engine->execute(&config, argc - cmd_start_idx, &argv[cmd_start_idx]);
+  status = engine->execute(&config, argc - cmd_start_idx, &argv[cmd_start_idx], &status);
 
   engine->cleanup();
   free((void *)env_vars_buf);

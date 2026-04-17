@@ -14,6 +14,8 @@
 
 /* clang-format off */
 #include "sandbox.h"
+#include "log.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,9 +53,12 @@
  * \return 0 on success, or -1 on error.
  */
 static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
+  int rc = 0;
   long fsize;
-  if (!fp || !buf || !size)
-    return -1;
+  if (!fp || !buf || !size) {
+    rc = -1;
+    return rc;
+  }
   fseek(fp, 0, SEEK_END);
   fsize = ftell(fp);
   rewind(fp);
@@ -64,10 +69,14 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
     size_t read_bytes = fread(*buf, 1, (size_t)fsize, fp);
     (*buf)[read_bytes] = '\0';
     *size = read_bytes;
-    return 0;
+    {
+      rc = 0;
+      return rc;
+    }
   } else {
     *size = 0;
-    return -1;
+    rc = -1;
+    return rc;
   }
 }
 
@@ -75,7 +84,10 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
  * \brief Initializes the engine.
  * \return 0 on success, or -1 on error.
  */
-static int wasmtime_init(void) { return 0; }
+static int wasmtime_init(void) {
+  int rc = 0;
+  return rc;
+}
 
 /**
  * \brief Executes a command in the sandbox synchronously.
@@ -85,7 +97,8 @@ static int wasmtime_init(void) { return 0; }
  * \return Exit status, or -1 on error.
  */
 static int wasmtime_execute(const sandbox_config_t *config, int argc,
-                            char **argv) {
+                            char **argv, int *exit_status) {
+  int rc = 0;
   char **wasmtime_argv;
   int i, status = -1;
   int current_arg = 0;
@@ -93,8 +106,10 @@ static int wasmtime_execute(const sandbox_config_t *config, int argc,
   FILE *out_fp = NULL;
   FILE *err_fp = NULL;
 
-  if (!config || !argv || argc < 1)
-    return -1;
+  if (!config || !argv || argc < 1) {
+    rc = -1;
+    return rc;
+  }
 
 #if defined(_MSC_VER)
   if (config->stdout_buffer)
@@ -161,7 +176,10 @@ static int wasmtime_execute(const sandbox_config_t *config, int argc,
       fclose(out_fp);
     if (err_fp)
       fclose(err_fp);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   wasmtime_argv[current_arg++] = (char *)"wasmtime";
@@ -204,7 +222,7 @@ static int wasmtime_execute(const sandbox_config_t *config, int argc,
     }
 
     status =
-        (int)_spawnvp(_P_WAIT, "wasmtime", (const char *const *)wasmtime_argv);
+        (int)spawnvp(P_WAIT, "wasmtime", (const char *const *)wasmtime_argv);
 
     if (out_fp) {
       _dup2(old_out, 1);
@@ -283,7 +301,15 @@ static int wasmtime_execute(const sandbox_config_t *config, int argc,
   }
 
   free(wasmtime_argv);
-  return status;
+  if (status == -1) {
+    rc = -1;
+    if (errno != 0)
+      LOG_DEBUG("Execute failed: %s", strerror(errno));
+  } else {
+    if (exit_status)
+      *exit_status = status;
+  }
+  return rc;
 }
 
 /**
@@ -297,6 +323,7 @@ static int wasmtime_execute(const sandbox_config_t *config, int argc,
 static int wasmtime_execute_async(const sandbox_config_t *config, int argc,
                                   char **argv,
                                   sandbox_process_t **out_process) {
+  int rc = 0;
   (void)config;
   (void)argc;
   (void)argv;
@@ -304,7 +331,8 @@ static int wasmtime_execute_async(const sandbox_config_t *config, int argc,
                   "wasmtime. Falling back to sync.\n");
   if (out_process)
     *out_process = NULL;
-  return -1;
+  rc = -1;
+  return rc;
 }
 
 /**
@@ -314,9 +342,11 @@ static int wasmtime_execute_async(const sandbox_config_t *config, int argc,
  * \return 0 on success, or -1 on error.
  */
 static int wasmtime_wait_process(sandbox_process_t *process, int *exit_status) {
+  int rc = 0;
   (void)process;
   (void)exit_status;
-  return -1;
+  rc = -1;
+  return rc;
 }
 
 /**

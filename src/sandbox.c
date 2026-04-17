@@ -11,49 +11,53 @@
  * \return 0 on success, or -1 if the engine is not found.
  */
 int get_sandbox_engine(const char *name, sandbox_engine_t **engine_out) {
+  int rc = 0;
+  
   if (engine_out) {
     *engine_out = NULL;
   }
 
   if (!name || !engine_out) {
-    return -1;
+    rc = -1;
+    return rc;
   }
 
   if (strcmp(name, "dummy") == 0) {
     *engine_out = &engine_dummy;
-    return 0;
+    return rc;
   }
 
   if (strcmp(name, "docker") == 0) {
     *engine_out = &engine_docker;
-    return 0;
+    return rc;
   }
 
   if (strcmp(name, "podman") == 0) {
     *engine_out = &engine_podman;
-    return 0;
+    return rc;
   }
 
   if (strcmp(name, "gvisor") == 0) {
     *engine_out = &engine_gvisor;
-    return 0;
+    return rc;
   }
 
   if (strcmp(name, "wasmtime") == 0) {
     *engine_out = &engine_wasmtime;
-    return 0;
+    return rc;
   }
 
   if (strcmp(name, "appcontainer") == 0) {
     *engine_out = &engine_appcontainer;
-    return 0;
+    return rc;
   }
 
   if (strcmp(name, "native") == 0) {
     *engine_out = &engine_native;
-    return 0;
+    return rc;
   }
 
   *engine_out = NULL;
-  return -1;
+  rc = -1;
+  return rc;
 }

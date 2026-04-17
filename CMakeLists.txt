@@ -9,6 +9,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 # Define source files for the sandbox core library
 set(SANDBOX_SOURCES
     src/sandbox.c
+    src/log.c
     src/engine_dummy.c
     src/engine_docker.c
     src/engine_podman.c
@@ -32,9 +33,11 @@ set_target_properties(sandbox_lib PROPERTIES OUTPUT_NAME "mountsandbox_static")
 target_link_libraries(sandbox_lib PRIVATE cfs)
 
 # Create shared library for FFI bindings
-add_library(sandbox_lib_shared SHARED ${SANDBOX_SOURCES})
-set_target_properties(sandbox_lib_shared PROPERTIES OUTPUT_NAME "mountsandbox" WINDOWS_EXPORT_ALL_SYMBOLS ON)
-target_link_libraries(sandbox_lib_shared PRIVATE cfs)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "DOS")
+    add_library(sandbox_lib_shared SHARED ${SANDBOX_SOURCES})
+    set_target_properties(sandbox_lib_shared PROPERTIES OUTPUT_NAME "mountsandbox" WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    target_link_libraries(sandbox_lib_shared PRIVATE cfs)
+endif()
 
 # Add main executable
 add_executable(mountsandbox src/main.c)

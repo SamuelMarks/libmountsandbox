@@ -11,6 +11,8 @@
  */
 /* clang-format off */
 #include "sandbox.h"
+#include "log.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,9 +51,12 @@
  * \return 0 on success, or -1 on error.
  */
 static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
+  int rc = 0;
   long fsize;
-  if (!fp || !buf || !size)
-    return -1;
+  if (!fp || !buf || !size) {
+    rc = -1;
+    return rc;
+  }
   fseek(fp, 0, SEEK_END);
   fsize = ftell(fp);
   rewind(fp);
@@ -62,10 +67,14 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
     size_t read_bytes = fread(*buf, 1, (size_t)fsize, fp);
     (*buf)[read_bytes] = '\0';
     *size = read_bytes;
-    return 0;
+    {
+      rc = 0;
+      return rc;
+    }
   } else {
     *size = 0;
-    return -1;
+    rc = -1;
+    return rc;
   }
 }
 #endif
@@ -99,8 +108,9 @@ static int native_init(void) {
  * \param argv Argument vector.
  * \return Exit status, or -1 on error.
  */
-static int native_execute(const sandbox_config_t *config, int argc,
-                          char **argv) {
+static int native_execute(const sandbox_config_t *config, int argc, char **argv,
+                          int *exit_status) {
+  int rc = 0;
   char **exec_argv;
   int i, status = -1;
   char abs_path[PATH_MAX];
@@ -121,8 +131,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
 
   const char *profile_network_deny = (char *)"(deny network*)\n";
 
-  if (!config || !argv)
-    return -1;
+  if (!config || !argv) {
+    rc = -1;
+    return rc;
+  }
 
 #if defined(_MSC_VER)
   if (config->stdout_buffer)
@@ -189,7 +201,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
 
   profile = (char *)malloc((size_t)profile_len);
   if (!profile) {
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
 #if defined(_MSC_VER)
@@ -233,7 +248,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
   exec_argv = (char **)malloc((size_t)(argc + 4) * sizeof(char *));
   if (!exec_argv) {
     free(profile);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   exec_argv[0] = (char *)"sandbox-exec";
@@ -438,7 +456,15 @@ static int native_execute(const sandbox_config_t *config, int argc,
 
   free(exec_argv);
   free(profile);
-  return status;
+  if (status == -1) {
+    rc = -1;
+    if (errno != 0)
+      LOG_DEBUG("Execute failed: %s", strerror(errno));
+  } else {
+    if (exit_status)
+      *exit_status = status;
+  }
+  return rc;
 }
 
 #elif defined(__linux__)
@@ -466,8 +492,9 @@ static int native_init(void) {
  * \param argv Argument vector.
  * \return Exit status, or -1 on error.
  */
-static int native_execute(const sandbox_config_t *config, int argc,
-                          char **argv) {
+static int native_execute(const sandbox_config_t *config, int argc, char **argv,
+                          int *exit_status) {
+  int rc = 0;
   char **exec_argv;
   int i, status = -1;
   pid_t pid;
@@ -478,8 +505,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
   FILE *out_fp = NULL;
   FILE *err_fp = NULL;
 
-  if (!config || !argv)
-    return -1;
+  if (!config || !argv) {
+    rc = -1;
+    return rc;
+  }
 
 #if defined(_MSC_VER)
   if (config->stdout_buffer)
@@ -515,7 +544,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
 
   exec_argv = (char **)malloc((size_t)(argc + base_args + 1) * sizeof(char *));
   if (!exec_argv) {
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   exec_argv[current_arg++] = (char *)"bwrap";
@@ -549,7 +581,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
     vstr_array = (char **)malloc((size_t)(config->mount_count * PATH_MAX));
     if (!vstr_array) {
       free(exec_argv);
-      return -1;
+      {
+        rc = -1;
+        return rc;
+      }
     }
 
     {
@@ -729,7 +764,15 @@ static int native_execute(const sandbox_config_t *config, int argc,
   }
 
   free(exec_argv);
-  return status;
+  if (status == -1) {
+    rc = -1;
+    if (errno != 0)
+      LOG_DEBUG("Execute failed: %s", strerror(errno));
+  } else {
+    if (exit_status)
+      *exit_status = status;
+  }
+  return rc;
 }
 
 #elif defined(_WIN32)
@@ -741,7 +784,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
  * \brief Initializes the engine.
  * \return 0 on success, or -1 on error.
  */
-static int native_init(void) { return 0; }
+static int native_init(void) {
+  int rc = 0;
+  return rc;
+}
 
 /**
  * \brief Executes a command in the sandbox synchronously.
@@ -750,8 +796,9 @@ static int native_init(void) { return 0; }
  * \param argv Argument vector.
  * \return Exit status, or -1 on error.
  */
-static int native_execute(const sandbox_config_t *config, int argc,
-                          char **argv) {
+static int native_execute(const sandbox_config_t *config, int argc, char **argv,
+                          int *exit_status) {
+  int rc = 0;
   HANDLE hJob;
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli;
   STARTUPINFO si;
@@ -765,8 +812,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
 
   const char *start_dir = NULL;
 
-  if (!config || !argv)
-    return -1;
+  if (!config || !argv) {
+    rc = -1;
+    return rc;
+  }
 
 #if defined(_MSC_VER)
   if (config->stdout_buffer)
@@ -793,8 +842,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
   }
 
   cmdline = (char *)malloc(cmdline_len + 1);
-  if (!cmdline)
-    return -1;
+  if (!cmdline) {
+    rc = -1;
+    return rc;
+  }
   cmdline[0] = '\0';
 
   for (i = 0; i < argc; i++) {
@@ -821,7 +872,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
     fprintf(stderr, "[libmountsandbox] CreateJobObject failed (%lu)\n",
             GetLastError());
     free(cmdline);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   /* Set basic restrictions */
@@ -854,7 +908,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
             GetLastError());
     CloseHandle(hJob);
     free(cmdline);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   if (config->disable_network) {
@@ -898,7 +955,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
             GetLastError());
     CloseHandle(hJob);
     free(cmdline);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   /* Assign process to the restricted job */
@@ -910,7 +970,10 @@ static int native_execute(const sandbox_config_t *config, int argc,
     CloseHandle(pi.hThread);
     CloseHandle(hJob);
     free(cmdline);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   /* Resume execution */
@@ -954,14 +1017,26 @@ static int native_execute(const sandbox_config_t *config, int argc,
     fclose(err_fp);
   }
 
-  return status;
+  if (status == -1) {
+    rc = -1;
+    if (errno != 0)
+      LOG_DEBUG("Execute failed: %s", strerror(errno));
+  } else {
+    if (exit_status)
+      *exit_status = status;
+  }
+  return rc;
 }
 
 #else
 /* ========================================================================= */
 /* Unsupported Platform Stub                                                 */
 /* ========================================================================= */
-static int native_init(void) { return -1; }
+static int native_init(void) {
+  int rc = 0;
+  rc = -1;
+  return rc;
+}
 
 /**
  * \brief Executes a command in the sandbox synchronously.
@@ -970,14 +1045,18 @@ static int native_init(void) { return -1; }
  * \param argv Argument vector.
  * \return Exit status, or -1 on error.
  */
-static int native_execute(const sandbox_config_t *config, int argc,
-                          char **argv) {
+static int native_execute(const sandbox_config_t *config, int argc, char **argv,
+                          int *exit_status) {
+  int rc = 0;
   (void)config;
   (void)argc;
   (void)argv;
   fprintf(stderr,
           "[libmountsandbox] Native sandbox not supported on this platform.\n");
-  return -1;
+  {
+    rc = -1;
+    return rc;
+  }
 }
 
 #endif
@@ -992,6 +1071,7 @@ static int native_execute(const sandbox_config_t *config, int argc,
  */
 static int native_execute_async(const sandbox_config_t *config, int argc,
                                 char **argv, sandbox_process_t **out_process) {
+  int rc = 0;
   (void)config;
   (void)argc;
   (void)argv;
@@ -999,7 +1079,8 @@ static int native_execute_async(const sandbox_config_t *config, int argc,
                   "native. Falling back to sync.\n");
   if (out_process)
     *out_process = NULL;
-  return -1;
+  rc = -1;
+  return rc;
 }
 
 /**
@@ -1009,9 +1090,11 @@ static int native_execute_async(const sandbox_config_t *config, int argc,
  * \return 0 on success, or -1 on error.
  */
 static int native_wait_process(sandbox_process_t *process, int *exit_status) {
+  int rc = 0;
   (void)process;
   (void)exit_status;
-  return -1;
+  rc = -1;
+  return rc;
 }
 
 /**

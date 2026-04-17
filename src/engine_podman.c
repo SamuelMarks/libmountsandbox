@@ -13,6 +13,8 @@
 
 /* clang-format off */
 #include "sandbox.h"
+#include "log.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +39,18 @@
 #endif
 
 /* clang-format on */
+
+/* MSVC uses underscore prefix for POSIX functions */
+#if defined(_MSC_VER)
+#define PLATFORM_SPAWNVP _spawnvp
+#define PLATFORM_P_WAIT _P_WAIT
+#define PLATFORM_P_NOWAIT _P_NOWAIT
+#else
+#define PLATFORM_SPAWNVP spawnvp
+#define PLATFORM_P_WAIT P_WAIT
+#define PLATFORM_P_NOWAIT P_NOWAIT
+#endif
+
 /**
  * \brief Reads all content from a file pointer into a buffer.
  * \param fp The file pointer to read from.
@@ -45,9 +59,12 @@
  * \return 0 on success, or -1 on error.
  */
 static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
+  int rc = 0;
   long fsize;
-  if (!fp || !buf || !size)
-    return -1;
+  if (!fp || !buf || !size) {
+    rc = -1;
+    return rc;
+  }
   fseek(fp, 0, SEEK_END);
   fsize = ftell(fp);
   rewind(fp);
@@ -58,10 +75,14 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
     size_t read_bytes = fread(*buf, 1, (size_t)fsize, fp);
     (*buf)[read_bytes] = '\0';
     *size = read_bytes;
-    return 0;
+    {
+      rc = 0;
+      return rc;
+    }
   } else {
     *size = 0;
-    return -1;
+    rc = -1;
+    return rc;
   }
 }
 
@@ -69,7 +90,10 @@ static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
  * \brief Initializes the Podman engine.
  * \return 0 assuming basic availability; deeper checks could be added.
  */
-static int podman_init(void) { return 0; }
+static int podman_init(void) {
+  int rc = 0;
+  return rc;
+}
 
 /**
  * \brief Executes a command inside a Podman container.
@@ -78,8 +102,9 @@ static int podman_init(void) { return 0; }
  * \param argv Array of command arguments.
  * \return The exit code of the Podman process, or -1 on internal error.
  */
-static int podman_execute(const sandbox_config_t *config, int argc,
-                          char **argv) {
+static int podman_execute(const sandbox_config_t *config, int argc, char **argv,
+                          int *exit_status) {
+  int rc = 0;
   char **podman_argv;
   int i;
   int status = -1;
@@ -94,8 +119,10 @@ static int podman_execute(const sandbox_config_t *config, int argc,
   char *app_buf_ptr = NULL;
   char user_buf[64];
 
-  if (!config || !argv)
-    return -1;
+  if (!config || !argv) {
+    rc = -1;
+    return rc;
+  }
 
 #if defined(_MSC_VER)
   if (config->stdout_buffer)
@@ -153,7 +180,10 @@ static int podman_execute(const sandbox_config_t *config, int argc,
   podman_argv =
       (char **)malloc((size_t)(argc + base_args + 1) * sizeof(char *));
   if (!podman_argv) {
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   podman_argv[current_arg++] = (char *)"podman";
@@ -263,7 +293,10 @@ static int podman_execute(const sandbox_config_t *config, int argc,
     if (app_buf_ptr)
       free(app_buf_ptr);
     free(podman_argv);
-    return -1;
+    {
+      rc = -1;
+      return rc;
+    }
   }
 
   if (config->mounts && config->mount_count > 0) {
@@ -283,7 +316,10 @@ static int podman_execute(const sandbox_config_t *config, int argc,
         if (app_buf_ptr)
           free(app_buf_ptr);
         free(podman_argv);
-        return -1;
+        {
+          rc = -1;
+          return rc;
+        }
       }
 #if defined(_MSC_VER)
       sprintf_s(vstr, vlen, "%s:/workspace%lu%s", config->mounts[m].dir,
@@ -327,7 +363,7 @@ static int podman_execute(const sandbox_config_t *config, int argc,
     if (config->timeout_secs > 0) {
 #ifdef _WIN32
       intptr_t hProcess =
-          _spawnvp(_P_NOWAIT, "podman", (const char *const *)podman_argv);
+          PLATFORM_SPAWNVP(PLATFORM_P_NOWAIT, "podman", (const char *const *)podman_argv);
       if (hProcess != -1) {
         if (WaitForSingleObject((HANDLE)hProcess,
                                 config->timeout_secs * 1000) == WAIT_TIMEOUT) {
@@ -344,11 +380,11 @@ static int podman_execute(const sandbox_config_t *config, int argc,
 #else
       /* Fallback for Watcom without Windows API */
       status =
-          (int)_spawnvp(_P_WAIT, "podman", (const char *const *)podman_argv);
+          (int)PLATFORM_SPAWNVP(PLATFORM_P_WAIT, "podman", (const char *const *)podman_argv);
 #endif
     } else {
       status =
-          (int)_spawnvp(_P_WAIT, "podman", (const char *const *)podman_argv);
+          (int)PLATFORM_SPAWNVP(PLATFORM_P_WAIT, "podman", (const char *const *)podman_argv);
     }
 
     if (old_out != -1) {
@@ -441,7 +477,15 @@ static int podman_execute(const sandbox_config_t *config, int argc,
   if (app_buf_ptr)
     free(app_buf_ptr);
   free(podman_argv);
-  return status;
+  if (status == -1) {
+    rc = -1;
+    if (errno != 0)
+      LOG_DEBUG("Execute failed: %s", strerror(errno));
+  } else {
+    if (exit_status)
+      *exit_status = status;
+  }
+  return rc;
 }
 
 /**
@@ -458,6 +502,7 @@ static int podman_execute(const sandbox_config_t *config, int argc,
  */
 static int podman_execute_async(const sandbox_config_t *config, int argc,
                                 char **argv, sandbox_process_t **out_process) {
+  int rc = 0;
   (void)config;
   (void)argc;
   (void)argv;
@@ -465,7 +510,8 @@ static int podman_execute_async(const sandbox_config_t *config, int argc,
                   "podman. Falling back to sync.\n");
   if (out_process)
     *out_process = NULL;
-  return -1;
+  rc = -1;
+  return rc;
 }
 
 /**
@@ -475,9 +521,11 @@ static int podman_execute_async(const sandbox_config_t *config, int argc,
  * \return 0 on success, or -1 on error.
  */
 static int podman_wait_process(sandbox_process_t *process, int *exit_status) {
+  int rc = 0;
   (void)process;
   (void)exit_status;
-  return -1;
+  rc = -1;
+  return rc;
 }
 
 /**

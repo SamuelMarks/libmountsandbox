@@ -26,7 +26,7 @@ static int dummy_init(void) { return 0; }
  * \return Always 0.
  */
 static int dummy_execute(const sandbox_config_t *config, int argc,
-                         char **argv) {
+                         char **argv, int *exit_status) {
   /* Cast to void to ignore unused parameter warnings in strict C89 */
   (void)config;
   (void)argc;
@@ -56,7 +56,7 @@ static int dummy_execute_async(const sandbox_config_t *config, int argc,
       (sandbox_process_t *)malloc(sizeof(sandbox_process_t));
   if (proc) {
     proc->dummy_field = 0; /* Just run it synchronously for the dummy mock */
-    proc->dummy_field = dummy_execute(config, argc, argv);
+    proc->dummy_field = dummy_execute(config, argc, argv, &proc->dummy_field);
   }
   if (out_process)
     *out_process = proc;

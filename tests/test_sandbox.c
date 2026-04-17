@@ -125,7 +125,7 @@ static void test_dummy_engine(void) {
   ret = engine_dummy.init();
   ASSERT_TRUE(ret == 0, "Dummy init should return 0");
 
-  ret = engine_dummy.execute(&config, 1, argv);
+  ret = engine_dummy.execute(&config, 1, argv, &ret);
   ASSERT_TRUE(ret == 0, "Dummy execute should return 0");
   {
     int exit_status = -1;
@@ -186,7 +186,7 @@ static void test_engine_exec(sandbox_engine_t *engine) {
 
   /* We don't assert the result to be 0 since some engines might fail to run if
    * not installed */
-  ret = engine->execute(&config, 1, argv);
+  ret = engine->execute(&config, 1, argv, &ret);
   ASSERT_TRUE(1, "Execute called");
 
   {
