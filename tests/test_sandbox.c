@@ -513,6 +513,10 @@ TEST test_container_engines(void) {
       free(out_buf);
       out_buf = NULL;
     }
+    if (err_buf) {
+      free(err_buf);
+      err_buf = NULL;
+    }
 
     /* Test tmpfile failure on stdout (1st call) and stderr (2nd call) */
     g_sandbox_mock_tmpfile_countdown = 1;
@@ -541,7 +545,7 @@ TEST test_container_engines(void) {
         free(out_buf);
         out_buf = NULL;
       }
-      ASSERT(rc == SANDBOX_ERR_OUT_OF_MEMORY || rc == SANDBOX_SUCCESS);
+      ASSERT_EQ(SANDBOX_ERR_OUT_OF_MEMORY, rc);
     }
     rc = reset_mocks();
     ASSERT_EQ(SANDBOX_SUCCESS, rc);
@@ -680,7 +684,7 @@ TEST test_wasmtime_engine(void) {
       free(out_buf);
       out_buf = NULL;
     }
-    ASSERT(rc == SANDBOX_ERR_OUT_OF_MEMORY || rc == SANDBOX_SUCCESS);
+    ASSERT_EQ(SANDBOX_ERR_OUT_OF_MEMORY, rc);
   }
   rc = reset_mocks();
   ASSERT_EQ(SANDBOX_SUCCESS, rc);
@@ -801,6 +805,10 @@ TEST test_appcontainer_and_native_engines(void) {
       free(out_buf);
       out_buf = NULL;
     }
+    if (err_buf) {
+      free(err_buf);
+      err_buf = NULL;
+    }
 
     g_sandbox_mock_tmpfile_countdown = 1;
     rc = engine->execute(&cfg, 1, argv, &status);
@@ -817,17 +825,20 @@ TEST test_appcontainer_and_native_engines(void) {
     rc = reset_mocks();
     ASSERT_EQ(SANDBOX_SUCCESS, rc);
 
-    for (oom_step = 1; oom_step <= 8; oom_step++) {
-      out_buf = NULL;
-      err_buf = NULL;
-      g_sandbox_mock_spawn_mode = 3;
-      g_sandbox_mock_malloc_countdown = oom_step;
-      rc = engine->execute(&cfg, 1, argv, &status);
-      if (out_buf) {
-        free(out_buf);
+    {
+      int max_oom = (idx == 0) ? 4 : 7;
+      for (oom_step = 1; oom_step <= max_oom; oom_step++) {
         out_buf = NULL;
+        err_buf = NULL;
+        g_sandbox_mock_spawn_mode = 3;
+        g_sandbox_mock_malloc_countdown = oom_step;
+        rc = engine->execute(&cfg, 1, argv, &status);
+        if (out_buf) {
+          free(out_buf);
+          out_buf = NULL;
+        }
+        ASSERT_EQ(SANDBOX_ERR_OUT_OF_MEMORY, rc);
       }
-      ASSERT(rc == SANDBOX_ERR_OUT_OF_MEMORY || rc == SANDBOX_SUCCESS);
     }
     rc = reset_mocks();
     ASSERT_EQ(SANDBOX_SUCCESS, rc);
@@ -1111,10 +1122,10 @@ TEST test_cli_runner(void) {
     rc = sandbox_cli_run(2, args_env, &exit_code);
     ASSERT_EQ(SANDBOX_ERR_INVALID_ARG, rc);
     g_sandbox_mock_count_char_fail = 0;
-    for (oom_step = 1; oom_step <= 8; oom_step++) {
+    for (oom_step = 1; oom_step <= 7; oom_step++) {
       g_sandbox_mock_malloc_countdown = oom_step;
       rc = sandbox_cli_run(2, args_env, &exit_code);
-      ASSERT(rc == SANDBOX_ERR_OUT_OF_MEMORY || rc == SANDBOX_SUCCESS);
+      ASSERT_EQ(SANDBOX_ERR_OUT_OF_MEMORY, rc);
     }
     rc = reset_mocks();
     ASSERT_EQ(SANDBOX_SUCCESS, rc);

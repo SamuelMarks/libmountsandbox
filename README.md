@@ -1,9 +1,10 @@
 libmountsandbox
 ===============
 
-[![License: CC0-1.0](https://licensebuttons.net/l/zero/1.0/80x15.png)](http://creativecommons.org/publicdomain/zero/1.0/)
+[![License](https://img.shields.io/badge/license-CC0--1.0-blue.svg)](https://creativecommons.org/publicdomain/zero/1.0/legalcode.en)
 [![Doc Coverage](https://img.shields.io/badge/docs-100%25-brightgreen.svg)](#)
 [![Test Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](#)
+[![CI](https://github.com/SamuelMarks/libmountsandbox/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/libmountsandbox/actions/workflows/ci.yml)
 
 **libmountsandbox** is a highly portable, strictly C89-compliant library and CLI tool for executing untrusted commands within isolated, sandboxed environments.
 

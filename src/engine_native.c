@@ -40,7 +40,7 @@ static sandbox_error_t native_execute(const sandbox_config_t *config, int argc,
   size_t profile_len;
   int i;
   int status = -1;
-  int base_args = 8;
+  int base_args = 10;
 #if defined(__linux__)
   int current_arg = 0;
   char uid_buf[32];
