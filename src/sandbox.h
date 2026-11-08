@@ -9,16 +9,56 @@
  */
 #ifndef SANDBOX_H
 #define SANDBOX_H
+
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif /* __cplusplus */
 
 /* clang-format off */
 #include <stddef.h>
-
 /* clang-format on */
+
+#if defined(__cplusplus) && __cplusplus >= 201703L
+/** \brief Compiler attribute to warn when a return value is discarded. */
+#define NO_DISCARD [[nodiscard]]
+#elif defined(__GNUC__) || defined(__clang__)
+/** \brief Compiler attribute to warn when a return value is discarded. */
+#define NO_DISCARD __attribute__((warn_unused_result))
+#elif defined(_MSC_VER) && _MSC_VER >= 1700
+/** \brief Compiler attribute to warn when a return value is discarded. */
+#define NO_DISCARD _Check_return_
+#else
+/** \brief Compiler attribute to warn when a return value is discarded. */
+#define NO_DISCARD
+#endif
+
 /**
- * \struct sandbox_mount_t
+ * \brief Error codes returned by all libmountsandbox functions.
+ */
+typedef enum sandbox_error {
+  /** \brief Operation completed successfully. */
+  SANDBOX_SUCCESS = 0,
+  /** \brief Invalid or NULL argument provided. */
+  SANDBOX_ERR_INVALID_ARG = 1,
+  /** \brief Memory allocation failed (out of memory). */
+  SANDBOX_ERR_OUT_OF_MEMORY = 2,
+  /** \brief Requested sandbox engine was not found. */
+  SANDBOX_ERR_NOT_FOUND = 3,
+  /** \brief Requested feature or platform is not supported. */
+  SANDBOX_ERR_UNSUPPORTED = 4,
+  /** \brief Sandbox command execution or OS API call failed. */
+  SANDBOX_ERR_EXEC_FAILED = 5,
+  /** \brief Input/output or temporary stream operation failed. */
+  SANDBOX_ERR_IO = 6
+} sandbox_error_t;
+
+/**
+ * \brief Opaque handle representing an asynchronously running sandboxed
+ * process.
+ */
+typedef struct sandbox_process_t sandbox_process_t;
+
+/**
  * \brief Represents a single directory mount inside the sandbox.
  */
 typedef struct {
@@ -31,7 +71,6 @@ typedef struct {
 } sandbox_mount_t;
 
 /**
- * \struct sandbox_config_t
  * \brief Configuration parameters for a sandbox execution.
  */
 typedef struct {
@@ -81,16 +120,13 @@ typedef struct {
    * namespace or unprivileged UID. */
   int drop_privileges;
 
-  /** \brief Target UID if drop_privileges is set (ignored on platforms without
-   * UID). Default 0 means nobody/dynamic. */
+  /** \brief Target UID if drop_privileges is set. */
   unsigned int target_uid;
 
-  /** \brief Target GID if drop_privileges is set (ignored on platforms without
-   * GID). Default 0 means nobody/dynamic. */
+  /** \brief Target GID if drop_privileges is set. */
   unsigned int target_gid;
 
-  /** \brief Array of syscall names to filter/deny (Syscall filtering/Seccomp).
-   */
+  /** \brief Array of syscall names to filter/deny. */
   const char **denied_syscalls;
 
   /** \brief Number of syscalls in the denied_syscalls array. */
@@ -104,7 +140,7 @@ typedef struct {
   const char *apparmor_profile;
 
   /** \brief Boolean flag (1=true, 0=false) to allocate a pseudo-terminal (PTY)
-   * for the sandbox. Merges stderr into stdout. */
+   * for the sandbox. */
   int use_pty;
 
   /** \brief Maximum network bandwidth in Mbps. 0 means unlimited. */
@@ -112,18 +148,11 @@ typedef struct {
 } sandbox_config_t;
 
 /**
- * \struct sandbox_process_t
- * \brief Opaque handle representing an asynchronously executing sandbox
- * process.
- */
-typedef struct sandbox_process_t sandbox_process_t;
-
-/**
- * \struct sandbox_engine_t
  * \brief Defines the interface for a specific sandbox implementation.
  */
 typedef struct {
-  /** \brief Short identifier for the engine (e.g., "docker", "native"). */
+  /** \brief Short identifier for the engine (e.g., "docker", "podman",
+   * "gvisor", "native"). */
   const char *engine_name;
 
   /** \brief Human-readable description of the engine. */
@@ -131,79 +160,78 @@ typedef struct {
 
   /**
    * \brief Initializes the sandbox engine.
-   * \return 0 on success, non-zero on failure.
+   * \return SANDBOX_SUCCESS on success, or an error enum on failure.
    */
-  int (*init)(void);
+  sandbox_error_t (*init)(void);
 
   /**
    * \brief Executes a command within the sandboxed environment.
    * \param config The sandbox configuration parameters.
    * \param argc The number of command arguments.
-   * \param argv The array of command arguments.
-   * \param exit_status Pointer to an integer to receive the exit status.
-   * \return 0 on success, or -1 on system error.
+   * \param argv The command arguments array (null-terminated).
+   * \param exit_status Pointer to store the exit code of the executed command.
+   * \return SANDBOX_SUCCESS on success, or an error enum on internal error.
    */
-  int (*execute)(const sandbox_config_t *config, int argc, char **argv,
-                 int *exit_status);
+  sandbox_error_t (*execute)(const sandbox_config_t *config, int argc,
+                             char **argv, int *exit_status);
 
   /**
-   * \brief Executes a command asynchronously within the sandboxed environment.
+   * \brief Executes a command within the sandboxed environment asynchronously.
    * \param config The sandbox configuration parameters.
    * \param argc The number of command arguments.
-   * \param argv The array of command arguments.
-   * \param out_process Pointer to store the opaque handle to the running
-   * process.
-   * \return 0 on success, or -1 on error.
+   * \param argv The command arguments array (null-terminated).
+   * \param out_process Pointer to receive the allocated process handle.
+   * \return SANDBOX_SUCCESS on success, or an error enum on internal error.
    */
-  int (*execute_async)(const sandbox_config_t *config, int argc, char **argv,
-                       sandbox_process_t **out_process);
+  sandbox_error_t (*execute_async)(const sandbox_config_t *config, int argc,
+                                   char **argv,
+                                   sandbox_process_t **out_process);
 
   /**
-   * \brief Waits for an asynchronously executing sandboxed process to complete.
-   * \param process The opaque handle returned by execute_async.
-   * \param exit_status Pointer to an integer where the exit code will be
-   * stored.
-   * \return 0 on success, or -1 on error.
+   * \brief Waits for an asynchronously executing sandboxed process to finish.
+   * \param process The process handle returned by execute_async.
+   * \param exit_status Pointer to receive the process exit code.
+   * \return SANDBOX_SUCCESS on success, or an error enum on internal error.
    */
-  int (*wait_process)(sandbox_process_t *process, int *exit_status);
+  sandbox_error_t (*wait_process)(sandbox_process_t *process, int *exit_status);
 
   /**
-   * \brief Frees an opaque handle returned by execute_async.
-   * \param process The opaque handle to free.
+   * @brief Frees the resources associated with an asynchronous process handle.
+   * @param process The process handle.
+   * @return SANDBOX_SUCCESS on success, or an error enum on failure.
    */
-  void (*free_process)(sandbox_process_t *process);
+  sandbox_error_t (*free_process)(sandbox_process_t *process);
 
   /**
-   * \brief Cleans up any resources allocated by the engine.
+   * @brief Cleans up any resources allocated by the engine.
+   * @return SANDBOX_SUCCESS on success, or an error enum on failure.
    */
-  void (*cleanup)(void);
+  sandbox_error_t (*cleanup)(void);
 } sandbox_engine_t;
 
 /**
  * \brief Retrieves a sandbox engine instance by its short name.
  * \param name The string name of the engine to retrieve.
- * \param engine_out Pointer to a sandbox_engine_t pointer to receive the result.
- * \return 0 on success, or -1 if the engine is not found.
+ * \param engine_out Pointer to store the resulting sandbox_engine_t pointer.
+ * \return SANDBOX_SUCCESS on success, or an error enum if not found or invalid.
  */
-int get_sandbox_engine(const char *name, sandbox_engine_t **engine_out);
+NO_DISCARD sandbox_error_t get_sandbox_engine(const char *name,
+                                              sandbox_engine_t **engine_out);
 
-/* Declarations of natively supported engines */
-
-/** \brief The dummy engine used primarily for testing abstractions. */
+/** \brief The dummy engine used for unit testing. */
 extern sandbox_engine_t engine_dummy;
 
-/** \brief The Docker engine that isolates execution via containerization. */
+/** \brief The Docker engine used for container-based sandboxing. */
 extern sandbox_engine_t engine_docker;
 
-/** \brief The Podman engine that isolates execution via daemonless
- * containerization. */
+/** \brief The Podman engine used for rootless container sandboxing. */
 extern sandbox_engine_t engine_podman;
 
-/** \brief The gVisor engine that isolates execution via runsc userspace kernel.
- */
+/** \brief The gVisor (runsc) engine used for strongly isolated container
+ * sandboxing. */
 extern sandbox_engine_t engine_gvisor;
 
-/** \brief The Wasmtime engine that executes WebAssembly via WASI. */
+/** \brief The Wasmtime engine used for WebAssembly WASI sandboxing. */
 extern sandbox_engine_t engine_wasmtime;
 
 /** \brief The Native Windows AppContainer engine. */

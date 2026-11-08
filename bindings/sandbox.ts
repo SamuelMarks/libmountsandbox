@@ -11,75 +11,105 @@ export const SandboxConfig = koffi.struct('sandbox_config_t', {
     mounts: koffi.pointer(SandboxMount),
     mount_count: 'size_t',
     disable_network: 'int',
-    env_vars: koffi.pointer('const char*'),
+    env_vars: 'const char**',
     env_count: 'size_t',
-    timeout_secs: 'unsigned int',
-    stdout_buffer: koffi.pointer('char*'),
-    stdout_size: koffi.pointer('size_t'),
-    stderr_buffer: koffi.pointer('char*'),
-    stderr_size: koffi.pointer('size_t'),
-    max_memory_mb: 'unsigned int',
-    max_cpu_percent: 'unsigned int',
+    timeout_secs: 'uint',
+    stdout_buffer: 'void*',
+    stdout_size: 'void*',
+    stderr_buffer: 'void*',
+    stderr_size: 'void*',
+    max_memory_mb: 'uint',
+    max_cpu_percent: 'uint',
     drop_privileges: 'int',
-    target_uid: 'unsigned int',
-    target_gid: 'unsigned int',
-    denied_syscalls: koffi.pointer('const char*'),
+    target_uid: 'uint',
+    target_gid: 'uint',
+    denied_syscalls: 'const char**',
     denied_syscall_count: 'size_t',
     seccomp_profile_path: 'const char*',
     apparmor_profile: 'const char*',
     use_pty: 'int',
-    max_network_mbps: 'unsigned int'
+    max_network_mbps: 'uint'
 });
 
-const InitProto = koffi.proto('int InitProto(void)');
-const ExecuteProto = koffi.proto('int ExecuteProto(sandbox_config_t*, int, const char**)');
-const CleanupProto = koffi.proto('void CleanupProto(void)');
+// Define function pointer prototypes
+const InitCallback = koffi.proto('int InitCallback(void)');
+const ExecuteCallback = koffi.proto('int ExecuteCallback(const sandbox_config_t* config, int argc, const char** argv, _Out_ int* exit_status)');
+const ExecuteAsyncCallback = koffi.proto('int ExecuteAsyncCallback(const sandbox_config_t* config, int argc, const char** argv, void** out_process)');
+const WaitProcessCallback = koffi.proto('int WaitProcessCallback(void* process, int* exit_status)');
+const FreeProcessCallback = koffi.proto('int FreeProcessCallback(void* process)');
+const CleanupCallback = koffi.proto('int CleanupCallback(void)');
 
 export const SandboxEngine = koffi.struct('sandbox_engine_t', {
     engine_name: 'const char*',
     description: 'const char*',
-    init: koffi.pointer(InitProto),
-    execute: koffi.pointer(ExecuteProto),
-    execute_async: 'void*',
-    wait_process: 'void*',
-    free_process: 'void*',
-    cleanup: koffi.pointer(CleanupProto)
+    init: koffi.pointer(InitCallback),
+    execute: koffi.pointer(ExecuteCallback),
+    execute_async: koffi.pointer(ExecuteAsyncCallback),
+    wait_process: koffi.pointer(WaitProcessCallback),
+    free_process: koffi.pointer(FreeProcessCallback),
+    cleanup: koffi.pointer(CleanupCallback)
 });
 
-export class LibMountSandbox {
-    private lib: koffi.IKoffiLib;
-    private getSandboxEngine: any;
+export interface MountConfig {
+    dir: string;
+    read_only: number;
+}
 
-    constructor(libPath: string = './build/libmountsandbox.so') {
-        const ext = path.extname(libPath);
-        let actualPath = libPath;
-        if (!ext || ext === '.so' || ext === '.dylib' || ext === '.dll') {
-            const platformExt = process.platform === 'darwin' ? '.dylib' : (process.platform === 'win32' ? '.dll' : '.so');
-            actualPath = libPath.replace(/\.(so|dylib|dll)$/, platformExt);
+export interface ExecutionConfig {
+    mounts?: MountConfig[];
+    mount_count?: number;
+    disable_network?: number;
+    env_vars?: string[];
+    env_count?: number;
+    timeout_secs?: number;
+    max_memory_mb?: number;
+    max_cpu_percent?: number;
+    drop_privileges?: number;
+    target_uid?: number;
+    target_gid?: number;
+    denied_syscalls?: string[];
+    denied_syscall_count?: number;
+    seccomp_profile_path?: string | null;
+    apparmor_profile?: string | null;
+    use_pty?: number;
+    max_network_mbps?: number;
+}
+
+export class LibMountSandbox {
+    private lib: any;
+    private get_sandbox_engine: any;
+
+    constructor(libPath?: string) {
+        if (!libPath) {
+            let ext = '.so';
+            let prefix = 'lib';
+            if (process.platform === 'darwin') ext = '.dylib';
+            else if (process.platform === 'win32') { ext = '.dll'; prefix = ''; }
+            libPath = path.join(__dirname, '..', 'build', `${prefix}mountsandbox${ext}`);
         }
-        this.lib = koffi.load(actualPath);
-        this.getSandboxEngine = this.lib.func('int get_sandbox_engine(const char* name, _Out_ sandbox_engine_t** engine_out)');
+        this.lib = koffi.load(libPath);
+        this.get_sandbox_engine = this.lib.func('int get_sandbox_engine(const char* name, _Out_ void** engine_out)');
     }
 
-    public execute(engineName: string, commandArgs: string[], config: any = null): number {
-        let enginePtrRef = [null];
-        const res = this.getSandboxEngine(engineName, enginePtrRef);
-        if (res !== 0 || !enginePtrRef[0]) {
-            throw new Error(`Unknown sandbox engine: ${engineName}`);
+    public execute(engineName: string, commandArgs: string[], config?: ExecutionConfig): number {
+        const engineOut: any[] = [null];
+        const rc = this.get_sandbox_engine(engineName, engineOut);
+        if (rc !== 0 || !engineOut[0]) {
+            throw new Error(`Engine '${engineName}' not found.`);
         }
-        const enginePtr = enginePtrRef[0];
 
-        const engine = koffi.decode(enginePtr, SandboxEngine);
+        const engine = koffi.decode(engineOut[0], SandboxEngine);
 
-        const init = koffi.decode(engine.init, InitProto);
-        const execute = koffi.decode(engine.execute, ExecuteProto);
-        const cleanup = koffi.decode(engine.cleanup, CleanupProto);
+        // Decode function pointers so we can call them
+        const init = koffi.decode(engine.init, InitCallback);
+        const execute = koffi.decode(engine.execute, ExecuteCallback);
+        const cleanup = koffi.decode(engine.cleanup, CleanupCallback);
 
         if (init() !== 0) {
-            throw new Error(`Failed to initialize engine: ${engineName}`);
+            throw new Error(`Failed to initialize engine '${engineName}'.`);
         }
 
-        let passedConfig = config;
+        let passedConfig: any = config;
         if (!passedConfig) {
             passedConfig = {
                 mounts: null,
@@ -109,9 +139,13 @@ export class LibMountSandbox {
         const argc = commandArgs.length;
         const argv = commandArgs;
 
-        const status = execute(passedConfig, argc, argv);
+        const statusOut: number[] = [0];
+        const execRc = execute(passedConfig, argc, argv, statusOut);
         cleanup();
-        
-        return status;
+
+        if (execRc !== 0) {
+            return -1;
+        }
+        return statusOut[0];
     }
 }

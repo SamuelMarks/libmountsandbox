@@ -4,32 +4,48 @@
  */
 /* clang-format off */
 #include "sandbox.h"
+#include "sandbox_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 /* clang-format on */
-void print_usage(const char *prog_name);
-void print_version(void);
 
 /**
  * \brief Prints the version information.
+ * \return SANDBOX_SUCCESS on completion.
  */
-void print_version(void) { printf("libmountsandbox version 0.1.0\n"); }
+#if defined(SANDBOX_ENABLE_MOCKS)
+int g_sandbox_mock_print_version_fail = 0;
+#endif
+
+NO_DISCARD static sandbox_error_t print_version(void) {
+#if defined(SANDBOX_ENABLE_MOCKS)
+  if (g_sandbox_mock_print_version_fail) {
+    return SANDBOX_ERR_IO;
+  }
+#endif
+  printf("libmountsandbox version 0.1.0\n");
+  return SANDBOX_SUCCESS;
+}
 
 /**
  * \brief Prints the usage information.
  * \param prog_name The name of the program executable.
+ * \return SANDBOX_SUCCESS on completion, or SANDBOX_ERR_INVALID_ARG if NULL.
  */
-void print_usage(const char *prog_name) {
+NO_DISCARD static sandbox_error_t print_usage(const char *prog_name) {
+  if (!prog_name) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
   fprintf(stderr, "Usage: %s [OPTIONS] [--] <command> [args...]\n", prog_name);
   fprintf(stderr, "Options:\n");
   fprintf(stderr,
           "  --help                  Show this help message and exit\n");
   fprintf(stderr,
           "  --version               Show version information and exit\n");
-  fprintf(stderr, "  --engine=<type>         Select sandbox engine (docker, "
-                  "dummy, native [default])\n");
+  fprintf(stderr, "  --engine=<type>         Select sandbox engine (native, "
+                  "docker, podman, gvisor, wasmtime, appcontainer, "
+                  "dummy [default])\n");
   fprintf(stderr, "  --no-network            Disable network access\n");
   fprintf(stderr, "  --env=KEY=VALUE         Set environment variable\n");
   fprintf(stderr, "  --mount=DIR             Mount a directory (read-write)\n");
@@ -53,28 +69,53 @@ void print_usage(const char *prog_name) {
           "Example: %s --engine=native --drop-privs --deny-syscall=ptrace "
           "--mount=/tmp -- curl http://google.com\n",
           prog_name);
+  return SANDBOX_SUCCESS;
 }
+
+#if defined(SANDBOX_ENABLE_MOCKS)
+/** \brief Flag to force safe_getenv to fail during fault-injection tests. */
+int g_sandbox_mock_getenv_fail = 0;
+#endif
 
 /**
  * \brief Safely retrieves an environment variable.
  * \param name The name of the environment variable.
  * \param out_value Pointer to receive the string value.
- * \return 0 on success, or -1 on error.
+ * \return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG on error.
  */
-static int safe_getenv(const char *name, const char **out_value) {
-  if (!name || !out_value)
-    return -1;
+NO_DISCARD static sandbox_error_t safe_getenv(const char *name,
+                                              const char **out_value) {
+  if (!name || !out_value) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+#if defined(SANDBOX_ENABLE_MOCKS)
+  if (g_sandbox_mock_getenv_fail) {
+    *out_value = NULL;
+    return SANDBOX_ERR_IO;
+  }
+#endif
 #if defined(_MSC_VER)
   {
+    static char env_bufs[12][512];
+    static int env_buf_idx = 0;
     char *value = NULL;
     size_t size = 0;
-    _dupenv_s(&value, &size, name);
-    *out_value = value;
+    if (_dupenv_s(&value, &size, name) != 0 || !value || value[0] == '\0') {
+      if (value) {
+        free(value);
+      }
+      *out_value = NULL;
+      return SANDBOX_SUCCESS;
+    }
+    strcpy_s(env_bufs[env_buf_idx], sizeof(env_bufs[0]), value);
+    free(value);
+    *out_value = env_bufs[env_buf_idx];
+    env_buf_idx = (env_buf_idx + 1) % 12;
   }
 #else
   *out_value = getenv(name);
 #endif
-  return 0;
+  return SANDBOX_SUCCESS;
 }
 
 /**
@@ -82,43 +123,64 @@ static int safe_getenv(const char *name, const char **out_value) {
  * \param s The string to search.
  * \param c The character to count.
  * \param out Pointer to receive the count.
- * \return 0 on success, or -1 on error.
+ * \return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG on error.
  */
-static int count_char(const char *s, char c, int *out) {
+#if defined(SANDBOX_ENABLE_MOCKS)
+int g_sandbox_mock_count_char_fail = 0;
+#endif
+
+NO_DISCARD static sandbox_error_t count_char(const char *s, char c, int *out) {
   int count = 0;
-  if (!s || !out)
-    return -1;
+  if (!out) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+#if defined(SANDBOX_ENABLE_MOCKS)
+  if (g_sandbox_mock_count_char_fail) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+#endif
+  if (!s) {
+    *out = 0;
+    return SANDBOX_SUCCESS;
+  }
   while (*s) {
-    if (*s == c)
+    if (*s == c) {
       count++;
+    }
     s++;
   }
   *out = count;
-  return 0;
+  return SANDBOX_SUCCESS;
 }
 
 /**
  * \brief Duplicates a string using malloc.
  * \param s The string to duplicate.
  * \param out Pointer to receive the duplicated string.
- * \return 0 on success, or -1 on error.
+ * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-static int my_strdup(const char *s, char **out) {
+NO_DISCARD static sandbox_error_t my_strdup(const char *s, char **out) {
+  sandbox_error_t rc;
   size_t len;
+  void *raw_d = NULL;
   char *d;
-  if (!s || !out)
-    return -1;
+  if (!s || !out) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
   len = strlen(s);
-  d = (char *)malloc(len + 1);
-  if (!d)
-    return -1;
+  rc = sandbox_alloc(len + 1, &raw_d);
+  if (rc != SANDBOX_SUCCESS) {
+    *out = NULL;
+    return rc;
+  }
+  d = (char *)raw_d;
 #if defined(_MSC_VER)
   strcpy_s(d, len + 1, s);
 #else
   strcpy(d, s);
 #endif
   *out = d;
-  return 0;
+  return SANDBOX_SUCCESS;
 }
 
 /**
@@ -127,16 +189,29 @@ static int my_strdup(const char *s, char **out) {
  * \param sep The separator character.
  * \param array The array to append to.
  * \param count Pointer to the current count, updated upon success.
- * \return 0 on success, or -1 on error.
+ * \param out_copy Pointer to store the allocated backing buffer for cleanup.
+ * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-static int split_and_append(const char *str, char sep, const char **array,
-                            size_t *count) {
+NO_DISCARD static sandbox_error_t split_and_append(const char *str, char sep,
+                                                   const char **array,
+                                                   size_t *count,
+                                                   char **out_copy) {
+  sandbox_error_t rc;
   char *copy = NULL;
-  char *p, *start;
-  if (!str)
-    return 0;
-  if (my_strdup(str, &copy) != 0)
-    return -1;
+  char *p;
+  char *start;
+  if (!array || !count || !out_copy) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+  *out_copy = NULL;
+  if (!str) {
+    return SANDBOX_SUCCESS;
+  }
+  rc = my_strdup(str, &copy);
+  if (rc != SANDBOX_SUCCESS) {
+    return rc;
+  }
+  *out_copy = copy;
   start = copy;
   while ((p = strchr(start, sep)) != NULL) {
     *p = '\0';
@@ -146,7 +221,7 @@ static int split_and_append(const char *str, char sep, const char **array,
   if (*start != '\0') {
     array[(*count)++] = start;
   }
-  return 0;
+  return SANDBOX_SUCCESS;
 }
 
 /**
@@ -156,16 +231,28 @@ static int split_and_append(const char *str, char sep, const char **array,
  * \param read_only Flag indicating if mounts are read-only.
  * \param array The array of sandbox_mount_t to append to.
  * \param count Pointer to the current count, updated upon success.
- * \return 0 on success, or -1 on error.
+ * \param out_copy Pointer to store the allocated backing buffer for cleanup.
+ * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-static int split_and_append_mount(const char *str, char sep, int read_only,
-                                  sandbox_mount_t *array, size_t *count) {
+NO_DISCARD static sandbox_error_t
+split_and_append_mount(const char *str, char sep, int read_only,
+                       sandbox_mount_t *array, size_t *count, char **out_copy) {
+  sandbox_error_t rc;
   char *copy = NULL;
-  char *p, *start;
-  if (!str)
-    return 0;
-  if (my_strdup(str, &copy) != 0)
-    return -1;
+  char *p;
+  char *start;
+  if (!array || !count || !out_copy) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+  *out_copy = NULL;
+  if (!str) {
+    return SANDBOX_SUCCESS;
+  }
+  rc = my_strdup(str, &copy);
+  if (rc != SANDBOX_SUCCESS) {
+    return rc;
+  }
+  *out_copy = copy;
   start = copy;
   while ((p = strchr(start, sep)) != NULL) {
     *p = '\0';
@@ -179,20 +266,25 @@ static int split_and_append_mount(const char *str, char sep, int read_only,
     array[*count].read_only = read_only;
     (*count)++;
   }
-  return 0;
+  return SANDBOX_SUCCESS;
 }
 
 /**
- * \brief Main entry point for the mountsandbox CLI.
+ * \brief Runs the CLI argument parser and executes the requested sandbox
+ * command.
  * \param argc Argument count.
  * \param argv Argument vector.
- * \return EXIT_SUCCESS on success, or EXIT_FAILURE on error.
+ * \param out_exit_code Pointer to store the resulting process exit code.
+ * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-int main(int argc, char **argv) {
+NO_DISCARD static sandbox_error_t sandbox_cli_run(int argc, char **argv,
+                                                  int *out_exit_code) {
+  sandbox_error_t rc = SANDBOX_SUCCESS;
+  void *raw_ptr = NULL;
   int i;
   int cmd_start_idx = 1;
-  int status;
-  const char *engine_name = "dummy"; /* Default engine */
+  int status = 0;
+  const char *engine_name = "dummy";
   sandbox_engine_t *engine = NULL;
   sandbox_config_t config;
   const char **env_vars_buf = NULL;
@@ -201,144 +293,156 @@ int main(int argc, char **argv) {
   size_t mount_count = 0;
   const char **syscalls_buf = NULL;
   size_t syscall_count = 0;
+  char *copy_env = NULL;
+  char *copy_mount = NULL;
+  char *copy_ro_mount = NULL;
+  char *copy_deny_syscall = NULL;
 
-  const char *env_engine = NULL;
-  const char *env_no_network = NULL;
-  const char *env_env = NULL;
-  const char *env_mount = NULL;
-  const char *env_ro_mount = NULL;
-  const char *env_timeout = NULL;
-  const char *env_memory_mb = NULL;
-  const char *env_cpu_pct = NULL;
-  const char *env_drop_privs = NULL;
-  const char *env_uid = NULL;
-  const char *env_gid = NULL;
-  const char *env_deny_syscall = NULL;
-  int extra_envs = 0, extra_mounts = 0, extra_syscalls = 0;
+  const char *env_vals[12];
+  static const char *const env_names[12] = {
+      "MOUNTSANDBOX_ENGINE",     "MOUNTSANDBOX_NO_NETWORK",
+      "MOUNTSANDBOX_ENV",        "MOUNTSANDBOX_MOUNT",
+      "MOUNTSANDBOX_RO_MOUNT",   "MOUNTSANDBOX_TIMEOUT",
+      "MOUNTSANDBOX_MEMORY_MB",  "MOUNTSANDBOX_CPU_PCT",
+      "MOUNTSANDBOX_DROP_PRIVS", "MOUNTSANDBOX_UID",
+      "MOUNTSANDBOX_GID",        "MOUNTSANDBOX_DENY_SYSCALL"};
+  int extra_envs = 0;
+  int extra_mounts = 0;
+  int extra_syscalls = 0;
 
-  safe_getenv("MOUNTSANDBOX_ENGINE", &env_engine);
-  safe_getenv("MOUNTSANDBOX_NO_NETWORK", &env_no_network);
-  safe_getenv("MOUNTSANDBOX_ENV", &env_env);
-  safe_getenv("MOUNTSANDBOX_MOUNT", &env_mount);
-  safe_getenv("MOUNTSANDBOX_RO_MOUNT", &env_ro_mount);
-  safe_getenv("MOUNTSANDBOX_TIMEOUT", &env_timeout);
-  safe_getenv("MOUNTSANDBOX_MEMORY_MB", &env_memory_mb);
-  safe_getenv("MOUNTSANDBOX_CPU_PCT", &env_cpu_pct);
-  safe_getenv("MOUNTSANDBOX_DROP_PRIVS", &env_drop_privs);
-  safe_getenv("MOUNTSANDBOX_UID", &env_uid);
-  safe_getenv("MOUNTSANDBOX_GID", &env_gid);
-  safe_getenv("MOUNTSANDBOX_DENY_SYSCALL", &env_deny_syscall);
-
-  if (env_env) {
-    count_char(env_env, ',', &extra_envs);
-    extra_envs++;
+  if (!argv || !out_exit_code) {
+    return SANDBOX_ERR_INVALID_ARG;
   }
-  if (env_mount) {
-    int n = 0;
-    count_char(env_mount, ',', &n);
-    extra_mounts += n + 1;
-  }
-  if (env_ro_mount) {
-    int n = 0;
-    count_char(env_ro_mount, ',', &n);
-    extra_mounts += n + 1;
-  }
-  if (env_deny_syscall) {
-    count_char(env_deny_syscall, ',', &extra_syscalls);
-    extra_syscalls++;
-  }
-  config.disable_network = 0;
-  config.timeout_secs = 0;
-  config.stdout_buffer = NULL;
-  config.stdout_size = NULL;
-  config.stderr_buffer = NULL;
-  config.stderr_size = NULL;
-  config.max_memory_mb = 0;
-  config.max_cpu_percent = 0;
-  config.drop_privileges = 0;
-  config.target_uid = 0;
-  config.target_gid = 0;
-  config.denied_syscalls = NULL;
-  config.denied_syscall_count = 0;
+  *out_exit_code = EXIT_FAILURE;
 
   if (argc < 2) {
-    print_usage(argv[0]);
-    return EXIT_FAILURE;
+    rc = print_usage(argc > 0 ? argv[0] : NULL);
+    if (rc != SANDBOX_SUCCESS) {
+      return rc;
+    }
+    return SANDBOX_ERR_INVALID_ARG;
   }
 
-  env_vars_buf =
-      (const char **)malloc((size_t)(argc + extra_envs) * sizeof(const char *));
-  mounts_buf = (sandbox_mount_t *)malloc((size_t)(argc + extra_mounts + 1) *
-                                         sizeof(sandbox_mount_t));
-  syscalls_buf = (const char **)malloc((size_t)(argc + extra_syscalls) *
-                                       sizeof(const char *));
-  if (!env_vars_buf || !mounts_buf || !syscalls_buf) {
-    fprintf(stderr, "Error: out of memory\n");
-    if (env_vars_buf)
-      free((void *)env_vars_buf);
-    if (mounts_buf)
-      free((void *)mounts_buf);
-    if (syscalls_buf)
-      free((void *)syscalls_buf);
-    return EXIT_FAILURE;
+  for (i = 0; i < 12; i++) {
+    env_vals[i] = NULL;
+    rc = safe_getenv(env_names[i], &env_vals[i]);
+    if (rc != SANDBOX_SUCCESS) {
+      return rc;
+    }
   }
 
-  /* Apply environment variables first */
-  if (env_engine) {
-    engine_name = env_engine;
+  {
+    int list_indices[4];
+    int list_counts[4];
+    list_indices[0] = 2;
+    list_indices[1] = 3;
+    list_indices[2] = 4;
+    list_indices[3] = 11;
+    for (i = 0; i < 4; i++) {
+      list_counts[i] = 0;
+      if (env_vals[list_indices[i]]) {
+        rc = count_char(env_vals[list_indices[i]], ',', &list_counts[i]);
+        if (rc != SANDBOX_SUCCESS) {
+          return rc;
+        }
+        list_counts[i]++;
+      }
+    }
+    extra_envs = list_counts[0];
+    extra_mounts = list_counts[1] + list_counts[2];
+    extra_syscalls = list_counts[3];
   }
-  if (env_no_network && strcmp(env_no_network, "0") != 0 &&
-      strcmp(env_no_network, "false") != 0) {
+
+  memset(&config, 0, sizeof(config));
+
+  rc = sandbox_alloc((size_t)(argc + extra_envs) * sizeof(const char *),
+                     &raw_ptr);
+  if (rc != SANDBOX_SUCCESS) {
+    fputs("Error: out of memory\x0a", stderr);
+    goto cleanup;
+  }
+  env_vars_buf = (const char **)raw_ptr;
+
+  rc = sandbox_alloc(
+      (size_t)(argc + extra_mounts + 1) * sizeof(sandbox_mount_t), &raw_ptr);
+  if (rc != SANDBOX_SUCCESS) {
+    fputs("Error: out of memory\x0a", stderr);
+    goto cleanup;
+  }
+  mounts_buf = (sandbox_mount_t *)raw_ptr;
+
+  rc = sandbox_alloc((size_t)(argc + extra_syscalls) * sizeof(const char *),
+                     &raw_ptr);
+  if (rc != SANDBOX_SUCCESS) {
+    fputs("Error: out of memory\x0a", stderr);
+    goto cleanup;
+  }
+  syscalls_buf = (const char **)raw_ptr;
+
+  if (env_vals[0]) {
+    engine_name = env_vals[0];
+  }
+  if (env_vals[1] && strcmp(env_vals[1], "0") != 0 &&
+      strcmp(env_vals[1], "false") != 0) {
     config.disable_network = 1;
   }
-  if (env_timeout) {
-    config.timeout_secs = (unsigned int)atoi(env_timeout);
+  if (env_vals[5]) {
+    config.timeout_secs = (unsigned int)atoi(env_vals[5]);
   }
-  if (env_memory_mb) {
-    config.max_memory_mb = (unsigned int)atoi(env_memory_mb);
+  if (env_vals[6]) {
+    config.max_memory_mb = (unsigned int)atoi(env_vals[6]);
   }
-  if (env_cpu_pct) {
-    config.max_cpu_percent = (unsigned int)atoi(env_cpu_pct);
+  if (env_vals[7]) {
+    config.max_cpu_percent = (unsigned int)atoi(env_vals[7]);
   }
-  if (env_drop_privs && strcmp(env_drop_privs, "0") != 0 &&
-      strcmp(env_drop_privs, "false") != 0) {
+  if (env_vals[8] && strcmp(env_vals[8], "0") != 0 &&
+      strcmp(env_vals[8], "false") != 0) {
     config.drop_privileges = 1;
   }
-  if (env_uid) {
+  if (env_vals[9]) {
     config.drop_privileges = 1;
-    config.target_uid = (unsigned int)atoi(env_uid);
+    config.target_uid = (unsigned int)atoi(env_vals[9]);
   }
-  if (env_gid) {
+  if (env_vals[10]) {
     config.drop_privileges = 1;
-    config.target_gid = (unsigned int)atoi(env_gid);
+    config.target_gid = (unsigned int)atoi(env_vals[10]);
   }
 
-  if (env_env && split_and_append(env_env, ',', env_vars_buf, &env_count) != 0)
-    return EXIT_FAILURE;
-  if (env_mount &&
-      split_and_append_mount(env_mount, ',', 0, mounts_buf, &mount_count) != 0)
-    return EXIT_FAILURE;
-  if (env_ro_mount && split_and_append_mount(env_ro_mount, ',', 1, mounts_buf,
-                                             &mount_count) != 0)
-    return EXIT_FAILURE;
-  if (env_deny_syscall && split_and_append(env_deny_syscall, ',', syscalls_buf,
-                                           &syscall_count) != 0)
-    return EXIT_FAILURE;
+  rc = split_and_append(env_vals[2], ',', env_vars_buf, &env_count, &copy_env);
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
+  }
+  rc = split_and_append_mount(env_vals[3], ',', 0, mounts_buf, &mount_count,
+                              &copy_mount);
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
+  }
+  rc = split_and_append_mount(env_vals[4], ',', 1, mounts_buf, &mount_count,
+                              &copy_ro_mount);
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
+  }
+  rc = split_and_append(env_vals[11], ',', syscalls_buf, &syscall_count,
+                        &copy_deny_syscall);
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
+  }
 
-  /* Parse basic arguments, CLI overrides ENV */
   while (cmd_start_idx < argc && strncmp(argv[cmd_start_idx], "--", 2) == 0) {
     if (strcmp(argv[cmd_start_idx], "--help") == 0) {
-      print_usage(argv[0]);
-      free((void *)env_vars_buf);
-      free((void *)mounts_buf);
-      free((void *)syscalls_buf);
-      return EXIT_SUCCESS;
+      *out_exit_code = EXIT_SUCCESS;
+      rc = print_usage(argv[0]);
+      if (rc != SANDBOX_SUCCESS) {
+        goto cleanup;
+      }
+      goto cleanup;
     } else if (strcmp(argv[cmd_start_idx], "--version") == 0) {
-      print_version();
-      free((void *)env_vars_buf);
-      free((void *)mounts_buf);
-      free((void *)syscalls_buf);
-      return EXIT_SUCCESS;
+      *out_exit_code = EXIT_SUCCESS;
+      rc = print_version();
+      if (rc != SANDBOX_SUCCESS) {
+        goto cleanup;
+      }
+      goto cleanup;
     } else if (strcmp(argv[cmd_start_idx], "--") == 0) {
       cmd_start_idx++;
       break;
@@ -374,16 +478,16 @@ int main(int argc, char **argv) {
       syscalls_buf[syscall_count++] = argv[cmd_start_idx] + 15;
     } else {
       fprintf(stderr, "Error: Unknown flag '%s'\n", argv[cmd_start_idx]);
-      print_usage(argv[0]);
-      free((void *)env_vars_buf);
-      free((void *)mounts_buf);
-      free((void *)syscalls_buf);
-      return EXIT_FAILURE;
+      rc = print_usage(argv[0]);
+      if (rc != SANDBOX_SUCCESS) {
+        goto cleanup;
+      }
+      rc = SANDBOX_ERR_INVALID_ARG;
+      goto cleanup;
     }
     cmd_start_idx++;
   }
 
-  /* Provide a default mount if none specified */
   if (mount_count == 0) {
     mounts_buf[mount_count].dir = ".";
     mounts_buf[mount_count].read_only = 0;
@@ -399,11 +503,12 @@ int main(int argc, char **argv) {
 
   if (cmd_start_idx >= argc) {
     fprintf(stderr, "Error: No command provided.\n");
-    print_usage(argv[0]);
-    free((void *)env_vars_buf);
-    free((void *)mounts_buf);
-    free((void *)syscalls_buf);
-    return EXIT_FAILURE;
+    rc = print_usage(argv[0]);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
+    }
+    rc = SANDBOX_ERR_INVALID_ARG;
+    goto cleanup;
   }
 
   printf("[libmountsandbox] Selected Engine: %s\n", engine_name);
@@ -418,20 +523,16 @@ int main(int argc, char **argv) {
     printf("[libmountsandbox] Environment: %s\n", config.env_vars[i]);
   }
 
-  if (get_sandbox_engine(engine_name, &engine) != 0 || !engine) {
+  rc = get_sandbox_engine(engine_name, &engine);
+  if (rc != SANDBOX_SUCCESS) {
     fprintf(stderr, "Error: Unknown engine '%s'\n", engine_name);
-    free((void *)env_vars_buf);
-    free((void *)mounts_buf);
-    free((void *)syscalls_buf);
-    return EXIT_FAILURE;
+    goto cleanup;
   }
 
-  if (engine->init() != 0) {
+  rc = engine->init();
+  if (rc != SANDBOX_SUCCESS) {
     fprintf(stderr, "Error: Failed to initialize engine '%s'\n", engine_name);
-    free((void *)env_vars_buf);
-    free((void *)mounts_buf);
-    free((void *)syscalls_buf);
-    return EXIT_FAILURE;
+    goto cleanup;
   }
 
   printf("[libmountsandbox] Executing command: ");
@@ -440,19 +541,67 @@ int main(int argc, char **argv) {
   }
   printf("\n");
 
-  /* Execute the sub-command via the selected engine */
-  status = engine->execute(&config, argc - cmd_start_idx, &argv[cmd_start_idx], &status);
+  rc = engine->execute(&config, argc - cmd_start_idx, &argv[cmd_start_idx],
+                       &status);
+  if (rc != SANDBOX_SUCCESS) {
+    fprintf(stderr, "[libmountsandbox] Execution failed with error %d\n",
+            (int)rc);
+    goto cleanup;
+  }
 
-  engine->cleanup();
-  free((void *)env_vars_buf);
-  free((void *)mounts_buf);
-  free((void *)syscalls_buf);
+  rc = engine->cleanup();
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
+  }
 
   if (status != 0) {
     fprintf(stderr, "[libmountsandbox] Command exited with status %d\n",
             status);
-    return status > 0 ? status : EXIT_FAILURE;
+    *out_exit_code = status > 0 ? status : EXIT_FAILURE;
+    goto cleanup;
   }
 
-  return EXIT_SUCCESS;
+  *out_exit_code = EXIT_SUCCESS;
+
+cleanup:
+  if (copy_env) {
+    free(copy_env);
+  }
+  if (copy_mount) {
+    free(copy_mount);
+  }
+  if (copy_ro_mount) {
+    free(copy_ro_mount);
+  }
+  if (copy_deny_syscall) {
+    free(copy_deny_syscall);
+  }
+  if (env_vars_buf) {
+    free(env_vars_buf);
+  }
+  if (mounts_buf) {
+    free(mounts_buf);
+  }
+  if (syscalls_buf) {
+    free(syscalls_buf);
+  }
+  return rc;
 }
+
+#ifndef SANDBOX_TESTING_MAIN
+/**
+ * \brief Main entry point for the mountsandbox CLI.
+ * \param argc Argument count.
+ * \param argv Argument vector.
+ * \return EXIT_SUCCESS on success, or non-zero exit status on error.
+ */
+int main(int argc, char **argv) {
+  int exit_code = EXIT_FAILURE;
+  sandbox_error_t rc;
+  rc = sandbox_cli_run(argc, argv, &exit_code);
+  if (rc != SANDBOX_SUCCESS) {
+    return EXIT_FAILURE;
+  }
+  return exit_code;
+}
+#endif

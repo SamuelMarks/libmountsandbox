@@ -1,115 +1,42 @@
-#if defined(__APPLE__) || defined(__linux__) || defined(__CYGWIN__)
-#define _XOPEN_SOURCE 600
-#endif
-#define _WIN32_WINNT 0x0600
 /**
- * \file engine_docker.c
- * \brief Docker-based sandbox implementation.
+ * @file engine_docker.c
+ * @brief Docker-based sandbox implementation.
  *
  * This engine maps the execution of a command into a Docker container.
- * It strictly supports C89 and compiles across multiple compilers
- * (MSVC, Watcom, GCC, Clang) by using platform-specific process execution.
  */
-
 /* clang-format off */
 #include "sandbox.h"
+#include "sandbox_common.h"
 #include "log.h"
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* Cross-platform header inclusion for process execution */
-#if defined(_WIN32) || defined(__WATCOMC__)
-#include <process.h>
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
-#else
-#include <signal.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
-
-#if defined(_WIN32) || defined(__WATCOMC__)
-#include <io.h>
-#endif
-
 /* clang-format on */
 
-/* MSVC uses underscore prefix for POSIX functions */
-#if defined(_MSC_VER)
-#define PLATFORM_SPAWNVP _spawnvp
-#define PLATFORM_P_WAIT _P_WAIT
-#define PLATFORM_P_NOWAIT _P_NOWAIT
-#else
-#define PLATFORM_SPAWNVP spawnvp
-#define PLATFORM_P_WAIT P_WAIT
-#define PLATFORM_P_NOWAIT P_NOWAIT
-#endif
+/**
+ * @brief Initializes the Docker engine.
+ * @return SANDBOX_SUCCESS on initialization.
+ */
+static sandbox_error_t docker_init(void) { return SANDBOX_SUCCESS; }
 
 /**
- * \brief Reads all content from a file pointer into a buffer.
- * \param fp The file pointer to read from.
- * \param buf Pointer to receive the allocated buffer.
- * \param size Pointer to receive the size of the buffer.
- * \return 0 on success, or -1 on error.
+ * @brief Executes a command inside a Docker container.
+ * @param config The sandbox configuration parameters.
+ * @param argc Number of command arguments.
+ * @param argv Array of command arguments.
+ * @param exit_status Pointer to receive the exit code of the Docker process.
+ * @return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-static int read_fp_to_buffer(FILE *fp, char **buf, size_t *size) {
-  int rc = 0;
-  long fsize;
-  if (!fp || !buf || !size) {
-    rc = -1;
-    return rc;
-  }
-  fseek(fp, 0, SEEK_END);
-  fsize = ftell(fp);
-  rewind(fp);
-  if (fsize < 0)
-    fsize = 0;
-  *buf = (char *)malloc((size_t)fsize + 1);
-  if (*buf) {
-    size_t read_bytes = fread(*buf, 1, (size_t)fsize, fp);
-    (*buf)[read_bytes] = '\0';
-    *size = read_bytes;
-    {
-      rc = 0;
-      return rc;
-    }
-  } else {
-    *size = 0;
-    rc = -1;
-    return rc;
-  }
-}
-
-/**
- * \brief Initializes the Docker engine.
- * \return 0 assuming basic availability; deeper checks could be added.
- */
-static int docker_init(void) {
-  int rc = 0;
-  return rc;
-}
-
-/**
- * \brief Executes a command inside a Docker container.
- * \param config The sandbox configuration parameters.
- * \param argc Number of command arguments.
- * \param argv Array of command arguments.
- * \return The exit code of the Docker process, or -1 on internal error.
- */
-static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
-                          int *exit_status) {
-  int rc = 0;
-  char **docker_argv;
+static sandbox_error_t docker_execute(const sandbox_config_t *config, int argc,
+                                      char **argv, int *exit_status) {
+  sandbox_error_t rc = SANDBOX_SUCCESS;
+  void *raw_ptr = NULL;
+  char **docker_argv = NULL;
   int i;
   int status = -1;
   char **vstr_array = NULL;
-  int base_args = 8;
+  size_t allocated_mounts = 0;
+  int base_args = 10;
   int current_arg = 0;
   FILE *out_fp = NULL;
   FILE *err_fp = NULL;
@@ -119,33 +46,29 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
   char *app_buf_ptr = NULL;
   char user_buf[64];
 
-  if (!config || !argv) {
-    rc = -1;
-    return rc;
+  if (!config || argc < 0 || !argv) {
+    return SANDBOX_ERR_INVALID_ARG;
   }
 
-#if defined(_MSC_VER)
-  if (config->stdout_buffer)
-    tmpfile_s(&out_fp);
-#else
-  if (config->stdout_buffer)
-    out_fp = tmpfile();
-#endif
   if (config->max_network_mbps > 0) {
     fprintf(stderr,
             "[libmountsandbox] Warning: Network bandwidth throttling "
-            "(max_network_mbps) is not natively enforced by this engine.\n");
+            "(max_network_mbps) is not natively enforced by this engine.\x0a");
   }
-#if defined(_MSC_VER)
-  if (config->stderr_buffer)
-    tmpfile_s(&err_fp);
-#else
-  if (config->stderr_buffer)
-    err_fp = tmpfile();
-#endif
 
-  /* Base args + optional --network none (2 args) + env vars (2 args each) +
-   * mounts (2 args each) + original args + NULL */
+  if (config->stdout_buffer) {
+    rc = sandbox_open_tmpfile(&out_fp);
+    if (rc != SANDBOX_SUCCESS) {
+      return rc;
+    }
+  }
+  if (config->stderr_buffer) {
+    rc = sandbox_open_tmpfile(&err_fp);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
+    }
+  }
+
   if (config->use_pty) {
     base_args += 2;
   }
@@ -165,30 +88,29 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
     base_args += 2;
   }
   if (config->drop_privileges) {
-    base_args += 2;
+    base_args += 4;
   }
-  if (config->denied_syscalls && config->denied_syscall_count > 0) {
+  if (config->denied_syscalls) {
     base_args += (int)(config->denied_syscall_count * 2);
   }
-  if (config->env_vars && config->env_count > 0) {
+  if (config->env_vars) {
     base_args += (int)(config->env_count * 2);
   }
-  if (config->mounts && config->mount_count > 0) {
+  if (config->mounts) {
     base_args += (int)(config->mount_count * 2);
   }
 
-  docker_argv =
-      (char **)malloc((size_t)(argc + base_args + 1) * sizeof(char *));
-  if (!docker_argv) {
-    {
-      rc = -1;
-      return rc;
-    }
+  rc = sandbox_alloc((size_t)(argc + base_args + 1) * sizeof(char *), &raw_ptr);
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
   }
+  docker_argv = (char **)raw_ptr;
 
   docker_argv[current_arg++] = (char *)"docker";
   docker_argv[current_arg++] = (char *)"run";
   docker_argv[current_arg++] = (char *)"--rm";
+  docker_argv[current_arg++] = (char *)"--pids-limit";
+  docker_argv[current_arg++] = (char *)"256";
 
   if (config->disable_network) {
     docker_argv[current_arg++] = (char *)"--network";
@@ -199,37 +121,42 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
     docker_argv[current_arg++] = (char *)"-t";
   }
   if (config->seccomp_profile_path) {
-    sec_buf_ptr = (char *)malloc(strlen(config->seccomp_profile_path) + 15);
-    if (sec_buf_ptr) {
-#if defined(_MSC_VER)
-      sprintf_s(sec_buf_ptr, (strlen(config->seccomp_profile_path) + 15),
-                "seccomp=%s", config->seccomp_profile_path);
-#else
-      sprintf(sec_buf_ptr, "seccomp=%s", config->seccomp_profile_path);
-#endif
-      docker_argv[current_arg++] = (char *)"--security-opt";
-      docker_argv[current_arg++] = sec_buf_ptr;
+    size_t sec_len = strlen(config->seccomp_profile_path) + 15;
+    rc = sandbox_alloc(sec_len, &raw_ptr);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
     }
+    sec_buf_ptr = (char *)raw_ptr;
+#if defined(_MSC_VER)
+    sprintf_s(sec_buf_ptr, sec_len, "seccomp=%s", config->seccomp_profile_path);
+#else
+    sprintf(sec_buf_ptr, "seccomp=%s", config->seccomp_profile_path);
+#endif
+    docker_argv[current_arg++] = (char *)"--security-opt";
+    docker_argv[current_arg++] = sec_buf_ptr;
   }
   if (config->apparmor_profile) {
-    app_buf_ptr = (char *)malloc(strlen(config->apparmor_profile) + 15);
-    if (app_buf_ptr) {
-#if defined(_MSC_VER)
-      sprintf_s(app_buf_ptr, (strlen(config->apparmor_profile) + 15),
-                "apparmor=%s", config->apparmor_profile);
-#else
-      sprintf(app_buf_ptr, "apparmor=%s", config->apparmor_profile);
-#endif
-      docker_argv[current_arg++] = (char *)"--security-opt";
-      docker_argv[current_arg++] = app_buf_ptr;
+    size_t app_len = strlen(config->apparmor_profile) + 15;
+    rc = sandbox_alloc(app_len, &raw_ptr);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
     }
+    app_buf_ptr = (char *)raw_ptr;
+#if defined(_MSC_VER)
+    sprintf_s(app_buf_ptr, app_len, "apparmor=%s", config->apparmor_profile);
+#else
+    sprintf(app_buf_ptr, "apparmor=%s", config->apparmor_profile);
+#endif
+    docker_argv[current_arg++] = (char *)"--security-opt";
+    docker_argv[current_arg++] = app_buf_ptr;
   }
 
   if (config->max_memory_mb > 0) {
 #if defined(_MSC_VER)
-    sprintf_s(mem_buf, sizeof(mem_buf), "%um", config->max_memory_mb);
+    sprintf_s(mem_buf, sizeof(mem_buf), SANDBOX_UINT_FMT "m",
+              config->max_memory_mb);
 #else
-    sprintf(mem_buf, "%um", config->max_memory_mb);
+    sprintf(mem_buf, SANDBOX_UINT_FMT "m", config->max_memory_mb);
 #endif
     docker_argv[current_arg++] = (char *)"--memory";
     docker_argv[current_arg++] = mem_buf;
@@ -237,10 +164,10 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
 
   if (config->max_cpu_percent > 0) {
 #if defined(_MSC_VER)
-    sprintf_s(cpu_buf, sizeof(cpu_buf), "%u.%02u",
+    sprintf_s(cpu_buf, sizeof(cpu_buf), SANDBOX_UINT_FMT ".%02u",
               config->max_cpu_percent / 100, config->max_cpu_percent % 100);
 #else
-    sprintf(cpu_buf, "%u.%02u", config->max_cpu_percent / 100,
+    sprintf(cpu_buf, SANDBOX_UINT_FMT ".%02u", config->max_cpu_percent / 100,
             config->max_cpu_percent % 100);
 #endif
     docker_argv[current_arg++] = (char *)"--cpus";
@@ -250,34 +177,37 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
   if (config->drop_privileges) {
     if (config->target_uid != 0 || config->target_gid != 0) {
 #if defined(_MSC_VER)
-      sprintf_s(user_buf, sizeof(user_buf), "%u:%u", config->target_uid,
+      sprintf_s(user_buf, sizeof(user_buf),
+                SANDBOX_UINT_FMT ":" SANDBOX_UINT_FMT, config->target_uid,
                 config->target_gid);
 #else
-      sprintf(user_buf, "%u:%u", config->target_uid, config->target_gid);
+      sprintf(user_buf, SANDBOX_UINT_FMT ":" SANDBOX_UINT_FMT,
+              config->target_uid, config->target_gid);
 #endif
     } else {
-      /* Default to nobody/nogroup on standard ubuntu */
 #if defined(_MSC_VER)
       strcpy_s(user_buf, sizeof(user_buf), "65534:65534");
 #else
       strcpy(user_buf, "65534:65534");
 #endif
     }
+    docker_argv[current_arg++] = (char *)"--security-opt";
+    docker_argv[current_arg++] = (char *)"no-new-privileges";
     docker_argv[current_arg++] = (char *)"-u";
     docker_argv[current_arg++] = user_buf;
   }
 
-  if (config->denied_syscalls && config->denied_syscall_count > 0) {
+  if (config->denied_syscalls) {
     size_t c;
     fprintf(stderr, "[libmountsandbox] Warning: Translating Docker syscall "
-                    "deny into capabilities drop (approximate).\n");
+                    "deny into capabilities drop (approximate).\x0a");
     for (c = 0; c < config->denied_syscall_count; c++) {
       docker_argv[current_arg++] = (char *)"--cap-drop";
       docker_argv[current_arg++] = (char *)config->denied_syscalls[c];
     }
   }
 
-  if (config->env_vars && config->env_count > 0) {
+  if (config->env_vars) {
     size_t e;
     for (e = 0; e < config->env_count; e++) {
       docker_argv[current_arg++] = (char *)"-e";
@@ -285,58 +215,38 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
     }
   }
 
-  /* We need to keep track of dynamically allocated mount strings */
-  vstr_array = (char **)malloc((size_t)(config->mount_count * sizeof(char *)));
-  if (!vstr_array) {
-    if (sec_buf_ptr)
-      free(sec_buf_ptr);
-    if (app_buf_ptr)
-      free(app_buf_ptr);
-    free(docker_argv);
-    {
-      rc = -1;
-      return rc;
-    }
-  }
-
-  if (config->mounts && config->mount_count > 0) {
+  if (config->mounts) {
     size_t m;
+    rc = sandbox_alloc(config->mount_count * sizeof(char *), &raw_ptr);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
+    }
+    vstr_array = (char **)raw_ptr;
     for (m = 0; m < config->mount_count; m++) {
-      size_t vlen = strlen(config->mounts[m].dir) +
-                    20; /* length + ":/mnt_N" + ":ro" + null */
-      char *vstr = (char *)malloc((size_t)vlen);
-      if (!vstr) {
-        /* Free previously allocated strings */
-        size_t j;
-        for (j = 0; j < m; j++)
-          free(vstr_array[j]);
-        free(vstr_array);
-        if (sec_buf_ptr)
-          free(sec_buf_ptr);
-        if (app_buf_ptr)
-          free(app_buf_ptr);
-        free(docker_argv);
-        {
-          rc = -1;
-          return rc;
-        }
+      size_t vlen = strlen(config->mounts[m].dir) + 25;
+      char *vstr = NULL;
+      rc = sandbox_alloc(vlen, &raw_ptr);
+      if (rc != SANDBOX_SUCCESS) {
+        goto cleanup;
       }
+      vstr = (char *)raw_ptr;
 #if defined(_MSC_VER)
-      sprintf_s(vstr, vlen, "%s:/workspace%lu%s", config->mounts[m].dir,
-                (unsigned long)m, config->mounts[m].read_only ? ":ro" : "");
+      sprintf_s(vstr, vlen, "%s:/workspace" SANDBOX_ULONG_FMT "%s",
+                config->mounts[m].dir, (unsigned long)m,
+                config->mounts[m].read_only ? ":ro" : "");
 #else
-      sprintf(vstr, "%s:/workspace%lu%s", config->mounts[m].dir,
-              (unsigned long)m, config->mounts[m].read_only ? ":ro" : "");
+      sprintf(vstr, "%s:/workspace" SANDBOX_ULONG_FMT "%s",
+              config->mounts[m].dir, (unsigned long)m,
+              config->mounts[m].read_only ? ":ro" : "");
 #endif
-      vstr_array[m] = vstr;
+      vstr_array[allocated_mounts++] = vstr;
       docker_argv[current_arg++] = (char *)"-v";
       docker_argv[current_arg++] = vstr;
     }
   }
 
-  /* Set working directory to the first mount point, or fallback */
   docker_argv[current_arg++] = (char *)"-w";
-  if (config->mount_count > 0) {
+  if (config->mounts) {
     docker_argv[current_arg++] = (char *)"/workspace0";
   } else {
     docker_argv[current_arg++] = (char *)"/";
@@ -348,197 +258,114 @@ static int docker_execute(const sandbox_config_t *config, int argc, char **argv,
   }
   docker_argv[current_arg] = NULL;
 
-#if defined(_WIN32) || defined(__WATCOMC__)
-  {
-    int old_out = -1, old_err = -1;
-    if (out_fp) {
-      old_out = _dup(1);
-      _dup2(_fileno(out_fp), 1);
-    }
-    if (err_fp) {
-      old_err = _dup(2);
-      _dup2(_fileno(err_fp), 2);
-    }
+  rc = sandbox_spawn_and_wait("docker", docker_argv, config, out_fp, err_fp,
+                              &status);
 
-    if (config->timeout_secs > 0) {
-#ifdef _WIN32
-      intptr_t hProcess =
-          PLATFORM_SPAWNVP(PLATFORM_P_NOWAIT, "docker", (const char *const *)docker_argv);
-      if (hProcess != -1) {
-        if (WaitForSingleObject((HANDLE)hProcess,
-                                config->timeout_secs * 1000) == WAIT_TIMEOUT) {
-          TerminateProcess((HANDLE)hProcess, 1);
-          status = 124;
-        } else {
-          DWORD exit_code;
-          if (GetExitCodeProcess((HANDLE)hProcess, &exit_code)) {
-            status = (int)exit_code;
-          }
-        }
-        CloseHandle((HANDLE)hProcess);
-      }
-#else
-      /* Fallback for Watcom without Windows API */
-      status =
-          (int)PLATFORM_SPAWNVP(PLATFORM_P_WAIT, "docker", (const char *const *)docker_argv);
-#endif
-    } else {
-      status =
-          (int)PLATFORM_SPAWNVP(PLATFORM_P_WAIT, "docker", (const char *const *)docker_argv);
-    }
+  if (rc != SANDBOX_SUCCESS) {
+    goto cleanup;
+  }
 
-    if (old_out != -1) {
-      _dup2(old_out, 1);
-      _close(old_out);
-    }
-    if (old_err != -1) {
-      _dup2(old_err, 2);
-      _close(old_err);
+  if (out_fp) {
+    rc = sandbox_read_fp_to_buffer(out_fp, config->stdout_buffer,
+                                   config->stdout_size);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
     }
   }
-#else
-  {
-    pid_t pid = fork();
-    if (pid < 0) {
-      status = -1;
-    } else if (pid == 0) {
-      /* Child process */
-      if (out_fp)
-        dup2(fileno(out_fp), STDOUT_FILENO);
-      if (err_fp)
-        dup2(fileno(err_fp), STDERR_FILENO);
-      execvp("docker", docker_argv);
-      exit(127); /* Exit if exec fails */
-    } else {
-      /* Parent process */
-      int wstatus;
-      if (config->timeout_secs > 0) {
-        unsigned int max_polls = config->timeout_secs * 10;
-        unsigned int polls = 0;
-        int wp = 0;
-        while (polls < max_polls) {
-          wp = waitpid(pid, &wstatus, WNOHANG);
-          if (wp != 0)
-            break;
-          {
-            struct timeval tv;
-            tv.tv_sec = 0;
-            tv.tv_usec = 100000; /* 100ms */
-            select(0, NULL, NULL, NULL, &tv);
-          }
-          polls++;
-        }
-        if (wp == 0) {
-          kill(pid, SIGKILL);
-          waitpid(pid, &wstatus, 0);
-          status = 124;
-        } else if (wp > 0 && WIFEXITED(wstatus)) {
-          status = WEXITSTATUS(wstatus);
-        } else {
-          status = -1;
-        }
-      } else {
-        waitpid(pid, &wstatus, 0);
-        if (WIFEXITED(wstatus)) {
-          status = WEXITSTATUS(wstatus);
-        } else {
-          status = -1;
-        }
-      }
+  if (err_fp) {
+    rc = sandbox_read_fp_to_buffer(err_fp, config->stderr_buffer,
+                                   config->stderr_size);
+    if (rc != SANDBOX_SUCCESS) {
+      goto cleanup;
     }
   }
-#endif
 
+  if (exit_status) {
+    *exit_status = status;
+  }
+
+cleanup:
+  if (out_fp) {
+    fclose(out_fp);
+  }
+  if (err_fp) {
+    fclose(err_fp);
+  }
   if (vstr_array) {
-    size_t m;
-    for (m = 0; m < config->mount_count; m++) {
-      free(vstr_array[m]);
+    size_t j;
+    for (j = 0; j < allocated_mounts; j++) {
+      free(vstr_array[j]);
     }
     free(vstr_array);
   }
-
-  if (out_fp && config->stdout_buffer) {
-    if (read_fp_to_buffer(out_fp, config->stdout_buffer, config->stdout_size) !=
-        0) {
-      status = -1;
-    }
-    fclose(out_fp);
-  }
-  if (err_fp && config->stderr_buffer) {
-    if (read_fp_to_buffer(err_fp, config->stderr_buffer, config->stderr_size) !=
-        0) {
-      status = -1;
-    }
-    fclose(err_fp);
-  }
-
-  if (sec_buf_ptr)
+  if (sec_buf_ptr) {
     free(sec_buf_ptr);
-  if (app_buf_ptr)
+  }
+  if (app_buf_ptr) {
     free(app_buf_ptr);
-  free(docker_argv);
-  if (status == -1) {
-    rc = -1;
-    if (errno != 0)
-      LOG_DEBUG("Execute failed: %s", strerror(errno));
-  } else {
-    if (exit_status)
-      *exit_status = status;
+  }
+  if (docker_argv) {
+    free(docker_argv);
   }
   return rc;
 }
 
 /**
- * \brief Executes a command in the sandbox asynchronously.
- * \param config Sandbox configuration.
- * \param argc Argument count.
- * \param argv Argument vector.
- * \param out_process Pointer to receive the process handle.
- * \return 0 on success, or -1 on error.
+ * @brief Executes a command in the sandbox asynchronously.
+ * @param config Sandbox configuration.
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ * @param out_process Pointer to receive the process handle.
+ * @return SANDBOX_ERR_UNSUPPORTED as async is not yet implemented for docker.
  */
-static int docker_execute_async(const sandbox_config_t *config, int argc,
-                                char **argv, sandbox_process_t **out_process) {
-  int rc = 0;
-  (void)config;
-  (void)argc;
-  (void)argv;
+static sandbox_error_t docker_execute_async(const sandbox_config_t *config,
+                                            int argc, char **argv,
+                                            sandbox_process_t **out_process) {
+  if (!config || argc < 0 || !argv) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
   fprintf(stderr, "[libmountsandbox] Async execution is a work in progress for "
-                  "docker. Falling back to sync.\n");
-  if (out_process)
+                  "docker. Falling back to sync.\x0a");
+  if (out_process) {
     *out_process = NULL;
-  rc = -1;
-  return rc;
+  }
+  return SANDBOX_ERR_UNSUPPORTED;
 }
 
 /**
- * \brief Waits for an asynchronous process to complete.
- * \param process The process handle.
- * \param exit_status Pointer to receive the exit status.
- * \return 0 on success, or -1 on error.
+ * @brief Waits for an asynchronous process to complete.
+ * @param process The process handle.
+ * @param exit_status Pointer to receive the exit status.
+ * @return SANDBOX_ERR_UNSUPPORTED or SANDBOX_ERR_INVALID_ARG.
  */
-static int docker_wait_process(sandbox_process_t *process, int *exit_status) {
-  int rc = 0;
-  (void)process;
-  (void)exit_status;
-  rc = -1;
-  return rc;
+static sandbox_error_t docker_wait_process(sandbox_process_t *process,
+                                           int *exit_status) {
+  if (!process || !exit_status) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+  return SANDBOX_ERR_UNSUPPORTED;
 }
 
 /**
- * \brief Frees an asynchronous process handle.
- * \param process The process handle.
+ * @brief Frees an asynchronous process handle.
+ * @param process The process handle.
+ * @return SANDBOX_SUCCESS on completion.
  */
-static void docker_free_process(sandbox_process_t *process) { (void)process; }
-
-/**
- * \brief Cleans up the engine resources.
- */
-static void docker_cleanup(void) {
-  /* No cleanup required for docker process invocation */
+static sandbox_error_t docker_free_process(sandbox_process_t *process) {
+  if (process) {
+    free(process);
+  }
+  return SANDBOX_SUCCESS;
 }
 
 /**
- * \brief The Docker sandbox engine export.
+ * @brief Cleans up the engine resources.
+ * @return SANDBOX_SUCCESS on completion.
+ */
+static sandbox_error_t docker_cleanup(void) { return SANDBOX_SUCCESS; }
+
+/**
+ * @brief The Docker sandbox engine export.
  */
 sandbox_engine_t engine_docker = {"docker",
                                   "Docker-based secure container sandbox",

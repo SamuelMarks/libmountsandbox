@@ -5,6 +5,7 @@ import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
+import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.PointerByReference
 import java.nio.file.Paths
 
@@ -85,13 +86,13 @@ interface InitCallback : Callback {
 /** Callback interface for engine execution. */
 interface ExecuteCallback : Callback {
     /** Invokes the execution function. Returns the process status code. */
-    fun invoke(config: SandboxConfig?, argc: Int, argv: Pointer?): Int
+    fun invoke(config: SandboxConfig?, argc: Int, argv: Pointer?, exit_status: IntByReference): Int
 }
 
 /** Callback interface for engine cleanup. */
 interface CleanupCallback : Callback {
     /** Invokes the cleanup function. */
-    fun invoke()
+    fun invoke(): Int
 }
 
 /**
@@ -111,10 +112,13 @@ open class SandboxEngine : Structure {
     @JvmField var init: InitCallback? = null
     /** Function pointer to execution logic. */
     @JvmField var execute: ExecuteCallback? = null
+    @JvmField var execute_async: Pointer? = null
+    @JvmField var wait_process: Pointer? = null
+    @JvmField var free_process: Pointer? = null
     /** Function pointer to cleanup logic. */
     @JvmField var cleanup: CleanupCallback? = null
 
-    override fun getFieldOrder(): List<String> = listOf("engine_name", "description", "init", "execute", "cleanup")
+    override fun getFieldOrder(): List<String> = listOf("engine_name", "description", "init", "execute", "execute_async", "wait_process", "free_process", "cleanup")
 }
 
 /** Native JNA wrapper for libmountsandbox. */
@@ -151,7 +155,7 @@ class Sandbox(libPath: String? = null) {
             if (so.toFile().exists()) return so.toString()
             if (dylib.toFile().exists()) return dylib.toString()
             if (dll.toFile().exists()) return dll.toString()
-            
+
             val buildReleaseDir = current.resolve("build/Release")
             val dllRel = buildReleaseDir.resolve("libmountsandbox.dll")
             if (dllRel.toFile().exists()) return dllRel.toString()
@@ -193,10 +197,11 @@ class Sandbox(libPath: String? = null) {
         val argv = com.sun.jna.StringArray(commandArgs.toTypedArray())
 
         val cfg = config ?: SandboxConfig()
-        
-        val status = executeFunc.invoke(cfg, argc, argv)
+
+        val statusRef = IntByReference(0)
+        val execRc = executeFunc.invoke(cfg, argc, argv, statusRef)
         cleanupFunc.invoke()
 
-        return status
+        return if (execRc == 0) statusRef.value else -1
     }
 }

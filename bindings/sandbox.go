@@ -7,15 +7,20 @@ package sandbox
 #include <stdlib.h>
 
 static int call_init(sandbox_engine_t* engine) {
-    return engine->init();
+    return (int)engine->init();
 }
 
 static int call_execute(sandbox_engine_t* engine, const sandbox_config_t *config, int argc, char **argv) {
-    return engine->execute(config, argc, argv);
+    int status = -1;
+    sandbox_error_t rc = engine->execute(config, argc, argv, &status);
+    if (rc != SANDBOX_SUCCESS) {
+        return -1;
+    }
+    return status;
 }
 
-static void call_cleanup(sandbox_engine_t* engine) {
-    engine->cleanup();
+static int call_cleanup(sandbox_engine_t* engine) {
+    return (int)engine->cleanup();
 }
 */
 import "C"
@@ -80,12 +85,11 @@ func (l *LibMountSandbox) Execute(engineName string, commandArgs []string, confi
         if res != 0 || enginePtr == nil {
                 return -1, fmt.Errorf("unknown sandbox engine: %s", engineName)
         }
-	
+
 
 	if C.call_init(enginePtr) != 0 {
 		return -1, fmt.Errorf("failed to initialize engine: %s", engineName)
 	}
-	defer C.call_cleanup(enginePtr)
 
 	var cConfig C.sandbox_config_t
 	// C.sandbox_config_t is 0-initialized automatically in Go
@@ -177,5 +181,8 @@ func (l *LibMountSandbox) Execute(engineName string, commandArgs []string, confi
 	}()
 
 	status := C.call_execute(enginePtr, &cConfig, cArgc, cArgvPtr)
+	if C.call_cleanup(enginePtr) != 0 {
+		return -1, fmt.Errorf("failed to cleanup engine: %s", engineName)
+	}
 	return int(status), nil
 }

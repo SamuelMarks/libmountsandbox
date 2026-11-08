@@ -57,6 +57,7 @@ core.*
 # ------------------------------------------
 /build/
 /build-*/
+/build_*/
 /out/
 /bin/
 CMakeCache.txt
@@ -357,6 +358,7 @@ tramp
 # Temporary setup / CLI specific files
 fix_*.py
 update_*.py
+!scripts/update_*.py
 test_c
 test_c.c
 revert.c

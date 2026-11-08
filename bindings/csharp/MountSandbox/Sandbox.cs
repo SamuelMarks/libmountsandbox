@@ -73,14 +73,14 @@ namespace MountSandbox
         public delegate int InitDelegate();
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate int ExecuteDelegate(ref SandboxConfigT config, int argc, IntPtr argv);
+        public delegate int ExecuteDelegate(ref SandboxConfigT config, int argc, IntPtr argv, out int exitStatus);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void CleanupDelegate();
-        
+        public delegate int CleanupDelegate();
+
         [DllImport("libc", EntryPoint="free", CallingConvention = CallingConvention.Cdecl)]
         public static extern void libc_free(IntPtr ptr);
-        
+
         [DllImport("msvcrt", EntryPoint="free", CallingConvention = CallingConvention.Cdecl)]
         public static extern void msvcrt_free(IntPtr ptr);
     }
@@ -204,7 +204,7 @@ namespace MountSandbox
         /// <param name="deniedSyscalls">A list of syscalls or capabilities to drop.</param>
         /// <param name="captureOutput">If true, standard output and error are captured and returned.</param>
         /// <returns>An ExecutionResult containing the exit code and outputs.</returns>
-        public ExecutionResult Execute(string[] commandArgs, 
+        public ExecutionResult Execute(string[] commandArgs,
                                        List<MountInfo> mounts = null,
                                        List<string> envVars = null,
                                        bool disableNetwork = false,
@@ -236,7 +236,7 @@ namespace MountSandbox
                 {
                     IntPtr dirPtr = Marshal.StringToHGlobalAnsi(mounts[i].Dir);
                     mountDirPtrs.Add(dirPtr);
-                    
+
                     var sm = new SandboxMountT { dir = dirPtr, read_only = mounts[i].ReadOnly ? 1 : 0 };
                     Marshal.StructureToPtr(sm, mountsArray + i * mountSize, false);
                 }
@@ -283,13 +283,13 @@ namespace MountSandbox
             config.drop_privileges = dropPrivileges ? 1 : 0;
             config.target_uid = targetUid;
             config.target_gid = targetGid;
-            
+
             IntPtr pSeccomp = IntPtr.Zero;
             if (!string.IsNullOrEmpty(seccompProfilePath)) {
                 pSeccomp = Marshal.StringToHGlobalAnsi(seccompProfilePath);
                 config.seccomp_profile_path = pSeccomp;
             }
-            
+
             IntPtr pApparmor = IntPtr.Zero;
             if (!string.IsNullOrEmpty(apparmorProfile)) {
                 pApparmor = Marshal.StringToHGlobalAnsi(apparmorProfile);
@@ -337,7 +337,8 @@ namespace MountSandbox
             try
             {
                 var executeDelegate = Marshal.GetDelegateForFunctionPointer<NativeMethods.ExecuteDelegate>(_engine.execute);
-                exitCode = executeDelegate(ref config, argc, argv);
+                int execRc = executeDelegate(ref config, argc, argv, out exitCode);
+                if (execRc != 0) exitCode = -1;
             }
             finally
             {

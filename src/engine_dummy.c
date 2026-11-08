@@ -1,46 +1,46 @@
-/* clang-format off */
-#include <stdlib.h>
 /**
  * \file engine_dummy.c
  * \brief A minimal dummy sandbox engine used strictly for unit testing.
  */
-
+/* clang-format off */
 #include "sandbox.h"
-
+#include "sandbox_common.h"
+#include <stdlib.h>
 /* clang-format on */
+
+/**
+ * \brief Internal state for an asynchronous dummy process.
+ */
+struct sandbox_process_t {
+  /** \brief Stored exit status of the dummy process. */
+  int dummy_field;
+};
+
 /**
  * \brief Initializes the dummy engine.
- * \return 0 to indicate successful initialization.
+ * \return SANDBOX_SUCCESS on initialization.
  */
-static int dummy_init(void) { return 0; }
+static sandbox_error_t dummy_init(void) { return SANDBOX_SUCCESS; }
 
 /**
  * \brief Executes a command using the dummy engine.
- *
- * Does not actually execute any command, but allows testing of parameter
- * passing across the sandbox interface.
- *
  * \param config The sandbox configuration parameters.
  * \param argc Number of arguments.
  * \param argv Argument list.
- * \return Always 0.
+ * \param exit_status Pointer to store the command exit code.
+ * \return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG on invalid
+ * arguments.
  */
-static int dummy_execute(const sandbox_config_t *config, int argc,
-                         char **argv, int *exit_status) {
-  /* Cast to void to ignore unused parameter warnings in strict C89 */
-  (void)config;
-  (void)argc;
-  (void)argv;
-  return 0;
+static sandbox_error_t dummy_execute(const sandbox_config_t *config, int argc,
+                                     char **argv, int *exit_status) {
+  if (!config || argc < 0 || !argv) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+  if (exit_status) {
+    *exit_status = 0;
+  }
+  return SANDBOX_SUCCESS;
 }
-
-/**
- * \brief Cleans up the dummy engine resources.
- */
-
-struct sandbox_process_t {
-  int dummy_field;
-};
 
 /**
  * \brief Executes a command in the sandbox asynchronously.
@@ -48,47 +48,61 @@ struct sandbox_process_t {
  * \param argc Argument count.
  * \param argv Argument vector.
  * \param out_process Pointer to receive the process handle.
- * \return 0 on success, or -1 on error.
+ * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-static int dummy_execute_async(const sandbox_config_t *config, int argc,
-                               char **argv, sandbox_process_t **out_process) {
-  sandbox_process_t *proc =
-      (sandbox_process_t *)malloc(sizeof(sandbox_process_t));
-  if (proc) {
-    proc->dummy_field = 0; /* Just run it synchronously for the dummy mock */
-    proc->dummy_field = dummy_execute(config, argc, argv, &proc->dummy_field);
+static sandbox_error_t dummy_execute_async(const sandbox_config_t *config,
+                                           int argc, char **argv,
+                                           sandbox_process_t **out_process) {
+  sandbox_error_t rc;
+  void *raw_proc = NULL;
+  sandbox_process_t *proc;
+  if (!config || argc < 0 || !argv || !out_process) {
+    return SANDBOX_ERR_INVALID_ARG;
   }
-  if (out_process)
-    *out_process = proc;
-  return 0;
+  rc = sandbox_alloc(sizeof(sandbox_process_t), &raw_proc);
+  if (rc != SANDBOX_SUCCESS) {
+    *out_process = NULL;
+    return rc;
+  }
+  proc = (sandbox_process_t *)raw_proc;
+  proc->dummy_field = 0;
+  *out_process = proc;
+  return dummy_execute(config, argc, argv, &proc->dummy_field);
 }
 
 /**
- * \brief Waits for an asynchronous process to complete.
- * \param process The process handle.
- * \param exit_status Pointer to receive the exit status.
- * \return 0 on success, or -1 on error.
+ * @brief Waits for an asynchronous process to complete.
+ * @param process The process handle.
+ * @param exit_status Pointer to receive the exit status.
+ * @return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG on invalid
+ * arguments.
  */
-static int dummy_wait_process(sandbox_process_t *process, int *exit_status) {
-  if (!process || !exit_status)
-    return -1;
+static sandbox_error_t dummy_wait_process(sandbox_process_t *process,
+                                          int *exit_status) {
+  if (!process || !exit_status) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
   *exit_status = process->dummy_field;
-  return 0;
+  return SANDBOX_SUCCESS;
 }
 
 /**
- * \brief Frees an asynchronous process handle.
- * \param process The process handle.
+ * @brief Frees an asynchronous process handle.
+ * @param process The process handle.
+ * @return SANDBOX_SUCCESS on completion.
  */
-static void dummy_free_process(sandbox_process_t *process) {
-  if (process)
+static sandbox_error_t dummy_free_process(sandbox_process_t *process) {
+  if (process) {
     free(process);
+  }
+  return SANDBOX_SUCCESS;
 }
 
 /**
  * \brief Cleans up the engine resources.
+ * \return SANDBOX_SUCCESS on completion.
  */
-static void dummy_cleanup(void) { /* No cleanup required */ }
+static sandbox_error_t dummy_cleanup(void) { return SANDBOX_SUCCESS; }
 
 /**
  * \brief The dummy engine export.

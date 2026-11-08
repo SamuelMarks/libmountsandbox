@@ -1,0 +1,118 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        name: Auto-format C/H files (clang-format -i)
+        args: ['-i', '-style=LLVM']
+        types_or: [c, c++]
+      - id: clang-format
+        name: Check C/H formatting (clang-format --dry-run --Werror)
+        args: ['--dry-run', '--Werror', '-style=LLVM']
+        types_or: [c, c++]
+  - repo: local
+    hooks:
+      - id: rust-fmt
+        name: Format and Check Rust Bindings (cargo fmt)
+        entry: bash -c "if command -v cargo >/dev/null 2>&1; then (cd bindings/rust && cargo fmt && cargo fmt -- --check); fi"
+        language: system
+        files: ^bindings/rust/.*\.rs$
+        pass_filenames: false
+      - id: cppcheck
+        name: Lint (Cppcheck)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" cppcheck
+        language: python
+        pass_filenames: false
+        types_or: [c, c++]
+      - id: check-enum-returns-clang
+        name: Lint Enum Return Types (libclang)
+        entry: >-
+          python -c "import glob, os, sys, urllib.request; p = next((x for x in ['/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libclang.dylib', '/opt/homebrew/opt/llvm/lib/libclang.dylib', '/usr/local/lib/libclang.dylib'] + sorted(glob.glob('/opt/homebrew/Cellar/llvm*/*/lib/libclang.dylib'), reverse=True) if os.path.exists(x)), None); sys.argv = ['check_enum_returns_clang.py'] + ([f'--libclang-path={p}'] if p else []) + sorted(glob.glob('src/*.c')) + ['--', '-Isrc']; hp = '../c-ci/precommit_hooks/check_enum_returns_clang.py'; exec(open(hp).read() if os.path.exists(hp) else urllib.request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_hooks/check_enum_returns_clang.py').read().decode('utf-8'))"
+        language: python
+        additional_dependencies: [clang]
+        pass_filenames: false
+        types_or: [c, c++]
+      - id: check-error-percolation-clang
+        name: Lint Strict Error Percolation (libclang)
+        entry: >-
+          python -c "import glob, os, sys, urllib.request; p = next((x for x in ['/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libclang.dylib', '/opt/homebrew/opt/llvm/lib/libclang.dylib', '/usr/local/lib/libclang.dylib'] + sorted(glob.glob('/opt/homebrew/Cellar/llvm*/*/lib/libclang.dylib'), reverse=True) if os.path.exists(x)), None); sys.argv = ['check_error_percolation_clang.py'] + ([f'--libclang-path={p}'] if p else []) + sorted(glob.glob('src/*.c')) + ['--compile-args', '-Isrc']; hp = '../c-ci/precommit_hooks/check_error_percolation_clang.py'; exec(open(hp).read() if os.path.exists(hp) else urllib.request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_hooks/check_error_percolation_clang.py').read().decode('utf-8'))"
+        language: python
+        additional_dependencies: [clang]
+        pass_filenames: false
+        types_or: [c, c++]
+      - id: check-no-discard-void-clang
+        name: Lint No-Discard Void Casts (libclang)
+        entry: >-
+          python -c "import glob, os, sys, urllib.request; p = next((x for x in ['/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libclang.dylib', '/opt/homebrew/opt/llvm/lib/libclang.dylib', '/usr/local/lib/libclang.dylib'] + sorted(glob.glob('/opt/homebrew/Cellar/llvm*/*/lib/libclang.dylib'), reverse=True) if os.path.exists(x)), None); sys.argv = ['check_no_discard_void_clang.py'] + ([f'--libclang-path={p}'] if p else []) + sorted(glob.glob('src/*.c')) + ['--', '-Isrc']; hp = '../c-ci/precommit_hooks/check_no_discard_void_clang.py'; exec(open(hp).read() if os.path.exists(hp) else urllib.request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_hooks/check_no_discard_void_clang.py').read().decode('utf-8'))"
+        language: python
+        additional_dependencies: [clang]
+        pass_filenames: false
+        types_or: [c, c++]
+      - id: build-gcc
+        name: Build (GCC)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" build gcc
+        language: python
+        pass_filenames: false
+      - id: test-gcc
+        name: Test (GCC)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" test gcc
+        language: python
+        pass_filenames: false
+      - id: build-clang
+        name: Build (Clang)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" build clang
+        language: python
+        pass_filenames: false
+      - id: test-clang
+        name: Test (Clang)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" test clang
+        language: python
+        pass_filenames: false
+      - id: build-msvc
+        name: Build (MSVC)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" build msvc
+        language: python
+        pass_filenames: false
+      - id: test-msvc
+        name: Test (MSVC)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" test msvc
+        language: python
+        pass_filenames: false
+      - id: build-mingw
+        name: Build (MinGW)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" build mingw
+        language: python
+        pass_filenames: false
+      - id: test-mingw
+        name: Test (MinGW)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" test mingw
+        language: python
+        pass_filenames: false
+      - id: valgrind
+        name: Valgrind (GCC)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" valgrind gcc
+        language: python
+        pass_filenames: false
+      - id: update-shields
+        name: Update README Shields (% doc coverage & % test coverage)
+        entry: >-
+          python -c "import os; p = '../c-ci/precommit_matrix.py'; exec(open(p).read() if os.path.exists(p) else __import__('urllib.request').request.urlopen('https://raw.githubusercontent.com/SamuelMarks/c-ci/master/precommit_matrix.py').read())" shields
+        language: python
+        additional_dependencies: [gcovr]
+        pass_filenames: false

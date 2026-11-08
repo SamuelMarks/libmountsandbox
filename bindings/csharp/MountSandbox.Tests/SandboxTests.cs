@@ -19,7 +19,7 @@ namespace MountSandbox.Tests
             using (var sandbox = new Sandbox("dummy"))
             {
                 var result = sandbox.Execute(new string[] { "test_command" });
-                
+
                 Assert.Equal(0, result.ExitCode);
             }
         }
@@ -54,7 +54,7 @@ namespace MountSandbox.Tests
                 Assert.Equal(0, result.ExitCode);
             }
         }
-        
+
         [Fact]
         public void TestDockerEngineInit()
         {
@@ -63,7 +63,7 @@ namespace MountSandbox.Tests
                 Assert.NotNull(sandbox);
             }
         }
-        
+
         [Fact]
         public void TestPodmanEngineInit()
         {

@@ -2,32 +2,32 @@ libmountsandbox
 ===============
 
 [![License: CC0-1.0](https://licensebuttons.net/l/zero/1.0/80x15.png)](http://creativecommons.org/publicdomain/zero/1.0/)
+[![Doc Coverage](https://img.shields.io/badge/docs-100%25-brightgreen.svg)](#)
+[![Test Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](#)
 
-**libmountsandbox** is a highly portable, strictly C89-compliant library and CLI tool for executing untrusted commands within isolated, sandboxed environments. 
+**libmountsandbox** is a highly portable, strictly C89-compliant library and CLI tool for executing untrusted commands within isolated, sandboxed environments.
 
-By abstracting various underlying OS and container-based isolation technologies into a single, unified C89 interface, `libmountsandbox` provides a robust "write-once, sandbox-anywhere" execution wrapper.
+By abstracting OS and container-based isolation technologies into a single, unified C89 interface with explicit `sandbox_error_t` enum error percolation, `libmountsandbox` provides a clean "write-once, sandbox-anywhere" execution wrapper.
 
 ## Key Features
 
-* **100% C89 Compliant:** Compatible with deep-legacy and modern toolchains alike (GCC, Clang, MSVC 2005, MSVC 2026, OpenWatcom).
-* **Multi-Engine Support:** Native OS sandboxes (macOS, Linux, Windows), Docker, Podman, gVisor, Wasmtime, and a Dummy/test engine.
+* **100% C89 Compliant:** Compatible with legacy and modern toolchains alike (GCC, Clang, AppleClang, MSVC, MinGW, OpenWatcom) under strict `-std=c89 -pedantic -Wall -Wextra -Werror` / `/W4 /WX` flags.
+* **Explicit Error Percolation:** All functions return a unified `sandbox_error_t` enum annotated with `NO_DISCARD`.
+* **Multi-Engine Support:** Native OS sandboxing (`native`), Docker (`docker`), Podman (`podman`), gVisor (`gvisor`), Wasmtime (`wasmtime`), Windows AppContainer (`appcontainer`), and a test engine (`dummy`).
 * **Granular Mounts:** Read-write and read-only directory mounting.
-* **Resource Limits:** Hard limits on memory usage and CPU core percentages.
-* **Execution Control:** Precise millisecond-polled timeouts, environment variable stripping/injection, network bandwidth shaping (Mbps), and non-blocking asynchronous execution.
-* **Privilege Dropping:** Unprivileged User Namespaces and UID/GID switching.
-* **Syscall Filtering:** Seccomp (BPF via bwrap / JSON via Docker) and AppArmor integration.
-* **Extensible Output:** Stdout and Stderr in-memory buffer capture API.
-* **Interactive PTY:** Optional pseudo-terminal allocation for interactive sandboxing.
-* **FFI Ready:** Bindings for Python, TypeScript, Go, Rust, Swift, Kotlin, Java, Ruby, and C# (.NET) are provided out-of-the-box.
+* **Resource & Security Controls:** Execution timeouts with 100ms polling, environment variable injection, container memory/CPU limits, UID/GID privilege dropping, capability/syscall dropping, Seccomp/AppArmor profile attachment, and optional PTY allocation.
+* **Stream Capture:** Deadlock-free `stdout` and `stderr` in-memory buffer capture backed by temporary file streams.
+* **FFI Ready:** Bindings for Python, TypeScript, Go, Rust, Swift, Kotlin, Ruby, and C# (.NET) are provided in `bindings/`.
 
-## Platform Support Matrix
+## Platform & Engine Matrix
 
-The default **Native** engine leverages built-in, dependency-free OS primitives, falling back to **Docker** where requested:
-
-* **macOS:** Uses `sandbox-exec` (Seatbelt) to generate dynamic Scheme profiles.
-* **Linux:** Uses `bwrap` (Bubblewrap) for unprivileged user, mount, and PID namespaces.
-* **Windows:** Uses **Job Objects** (via `native`) to impose process restrictions, or the new strict **AppContainers** (via `appcontainer`) for maximum GUI/FS isolation.
-* **Universal:** A **Docker** engine translates configuration intents into highly restricted `docker run` parameters. A **Podman** engine is also available as a drop-in, daemonless alternative using `podman run`. A **gVisor** engine is available for stronger isolation using a userspace kernel (`runsc`). A **Wasmtime** engine translates intents to WASI capabilities for running WebAssembly modules directly from C.
+* **Native (`native`):** Uses `sandbox-exec` (Seatbelt) on macOS to generate dynamic Scheme profiles restricting file writes and network access, `bwrap` (Bubblewrap) with `--unshare-all` on Linux for unprivileged namespace isolation, and Job Object limit computation with direct process execution and timeout management on Windows.
+* **Docker (`docker`):** Translates `sandbox_config_t` into restricted `docker run --rm` invocations with volume mounts, `--network none`, `--memory`, `--cpus`, `-u UID:GID`, `--cap-drop`, and `--security-opt`.
+* **Podman (`podman`):** Daemonless, rootless container alternative translating configuration intents into `podman run --rm`.
+* **gVisor (`gvisor`):** Executes Docker containers under gVisor's `runsc` userspace kernel (`--runtime=runsc`).
+* **Wasmtime (`wasmtime`):** Translates mounts, stack limits, networking, and environment variables into WASI capabilities passed to `wasmtime run`.
+* **AppContainer (`appcontainer`):** Windows AppContainer execution target.
+* **Dummy (`dummy`):** No-op engine for unit testing and FFI verification (including async handle lifecycle testing).
 
 ## Quick Start
 
@@ -48,54 +48,96 @@ ctest --output-on-failure
 
 ### 1. Command Line Interface (CLI)
 
-Options can be supplied as CLI arguments or environment variables. CLI flags take precedence.
+Options can be supplied as CLI arguments or `MOUNTSANDBOX_*` environment variables. CLI flags take precedence.
 
 ```bash
 # Using CLI flags
-./mountsandbox --engine=native \
-    --ro-mount=/etc \
-    --mount=/tmp \
-    --timeout=5 \
-    --memory-mb=128 \
-    --no-network \
+./mountsandbox --engine=native
+    --ro-mount=/etc
+    --mount=/tmp
+    --timeout=5
+    --memory-mb=128
+    --no-network
     -- cat /etc/passwd
 
 # Using Environment Variables
-MOUNTSANDBOX_ENGINE=native \
-MOUNTSANDBOX_RO_MOUNT=/etc \
-MOUNTSANDBOX_MOUNT=/tmp \
-MOUNTSANDBOX_TIMEOUT=5 \
-MOUNTSANDBOX_MEMORY_MB=128 \
-MOUNTSANDBOX_NO_NETWORK=1 \
+MOUNTSANDBOX_ENGINE=native
+MOUNTSANDBOX_RO_MOUNT=/etc
+MOUNTSANDBOX_MOUNT=/tmp
+MOUNTSANDBOX_TIMEOUT=5
+MOUNTSANDBOX_MEMORY_MB=128
+MOUNTSANDBOX_NO_NETWORK=1
 ./mountsandbox -- cat /etc/passwd
 ```
 
-### 2. C Library API
+### 2. C Library API (Strict C89)
 ```c
 #include "sandbox.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+NO_DISCARD static sandbox_error_t run_command(int *out_status) {
+  sandbox_config_t config;
+  sandbox_mount_t mounts[1];
+  sandbox_engine_t *engine = NULL;
+  sandbox_error_t rc;
+  sandbox_error_t cleanup_rc;
+  char *cmd[4];
+
+  if (!out_status) {
+    return SANDBOX_ERR_INVALID_ARG;
+  }
+
+  memset(&config, 0, sizeof(config));
+  mounts[0].dir = "/tmp";
+  mounts[0].read_only = 0;
+
+  cmd[0] = (char *)"ls";
+  cmd[1] = (char *)"-la";
+  cmd[2] = (char *)"/tmp";
+  cmd[3] = NULL;
+
+  config.mounts = mounts;
+  config.mount_count = 1;
+  config.timeout_secs = 5;
+  config.disable_network = 1;
+
+  rc = get_sandbox_engine("native", &engine);
+  if (rc != SANDBOX_SUCCESS) {
+    return rc;
+  }
+
+  rc = engine->init();
+  if (rc != SANDBOX_SUCCESS) {
+    return rc;
+  }
+
+  rc = engine->execute(&config, 3, cmd, out_status);
+  cleanup_rc = engine->cleanup();
+  if (rc == SANDBOX_SUCCESS && cleanup_rc != SANDBOX_SUCCESS) {
+    rc = cleanup_rc;
+  }
+
+  return rc;
+}
 
 int main(void) {
-    sandbox_config_t config = {0}; // Initialize all to 0/NULL
-    sandbox_mount_t mounts[1] = {{"/tmp", 0}}; // Read-write mount
-    
-    config.mounts = mounts;
-    config.mount_count = 1;
-    config.timeout_secs = 5;
-    config.disable_network = 1;
-    
-    sandbox_engine_t *engine = get_sandbox_engine("native");
-    engine->init();
-    
-    char *cmd[] = {"ls", "-la", "/tmp", NULL};
-    int status = engine->execute(&config, 3, cmd);
-    
-    engine->cleanup();
-    return status;
+  int status = 0;
+  sandbox_error_t rc;
+
+  rc = run_command(&status);
+  if (rc != SANDBOX_SUCCESS) {
+    fprintf(stderr, "Execution failed with sandbox_error_t: %d\n", (int)rc);
+    return EXIT_FAILURE;
+  }
+
+  return status;
 }
 ```
 
 ### 3. Python FFI Binding
-`libmountsandbox` provides a shared object (`libmountsandbox.dylib` / `.so` / `.dll`) easily callable via Python's `ctypes`.
+`libmountsandbox` builds a shared library (`libmountsandbox.dylib` / `.so` / `mountsandbox.dll`) callable via Python's `ctypes`.
 
 ```python
 from bindings.sandbox import LibMountSandbox
@@ -138,28 +180,23 @@ func main() {
 ```
 
 ### 6. Rust FFI Binding
-Rust bindings are provided using safe wrappers around raw FFI calls. Ensure you have the library compiled and linked.
+Rust bindings are provided using safe wrappers around raw FFI calls in `bindings/rust`.
 
 ```rust
-use mountsandbox::{LibMountSandbox, ExecuteConfig};
+use mountsandbox::{LibMountSandbox, SandboxConfig};
 
 fn main() {
     let sandbox = LibMountSandbox::new();
-    let status = sandbox.execute("native", &["echo", "hello world"], None).unwrap();
+    let config = SandboxConfig::default();
+    let status = sandbox
+        .execute("native", &["echo", "hello world"], Some(&config))
+        .unwrap();
     println!("Command exited with status: {}", status);
 }
 ```
 
-## Documentation
-
-For deep-dive documentation, please refer to the following guides:
-1. [ARCHITECTURE.md](ARCHITECTURE.md) - System design, cross-platform mapping, and C89 constraints.
-2. [USAGE.md](USAGE.md) - Full CLI options, C API, Python, and TypeScript FFI usage guides.
-3. [API.md](API.md) - Deep dive into the `sandbox.h` C structs and functions.
-4. [SKILLS.md](SKILLS.md) - Detailed breakdown of isolation capabilities and platform support matrix.
-
 ### 7. Swift FFI Binding
-Swift bindings are provided as a Swift Package that safely wraps the C library.
+Swift bindings are provided as a Swift Package in `bindings/swift`.
 
 ```swift
 import MountSandbox
@@ -170,7 +207,7 @@ print("Command exited with status: \(status)")
 ```
 
 ### 8. Kotlin FFI Binding
-Kotlin bindings are provided as a Gradle project utilizing JNA for safe cross-platform C interop.
+Kotlin bindings are provided as a Gradle project utilizing JNA in `bindings/kotlin`.
 
 ```kotlin
 import mountsandbox.Sandbox
@@ -183,7 +220,7 @@ fun main() {
 ```
 
 ### 9. Ruby FFI Binding
-Ruby bindings are provided utilizing the `ffi` gem for safe cross-platform C interop.
+Ruby bindings are provided utilizing the `ffi` gem in `bindings/sandbox.rb`.
 
 ```ruby
 require_relative 'bindings/sandbox'
@@ -192,3 +229,29 @@ sandbox = LibMountSandbox::SandboxWrapper.new
 status = sandbox.execute("native", ["echo", "hello world"])
 puts "Command exited with status: #{status}"
 ```
+
+### 10. C# (.NET) FFI Binding
+C# bindings are provided in `bindings/csharp` using P/Invoke.
+
+```csharp
+using System;
+using MountSandbox;
+
+class Program
+{
+    static void Main()
+    {
+        using var sandbox = new Sandbox("native");
+        ExecutionResult res = sandbox.Execute(new[] { "echo", "hello world" });
+        Console.WriteLine($"Command exited with status: {res.ExitCode}");
+    }
+}
+```
+
+## Documentation
+
+For deep-dive documentation, please refer to the following guides:
+1. [ARCHITECTURE.md](ARCHITECTURE.md) - System design, engine translation details, and C89 execution/stream architecture.
+2. [USAGE.md](USAGE.md) - Full CLI options, C89 API, and language FFI usage guides.
+3. [API.md](API.md) - Deep dive into the `sandbox.h` C89 structs, enums, and functions.
+4. [SKILLS.md](SKILLS.md) - Detailed breakdown of isolation capabilities and platform support matrix.

@@ -7,7 +7,7 @@ public struct SandboxMount {
     public let dir: String
     /// Boolean flag indicating if the mount is read-only.
     public let readOnly: Bool
-    
+
     /// Initializes a new SandboxMount.
     /// - Parameters:
     ///   - dir: The directory path on the host.
@@ -80,7 +80,7 @@ public struct SandboxConfig {
 
 /// A high-level, safe wrapper around the `libmountsandbox` C API.
 public struct LibMountSandbox {
-    
+
     /// Represents errors that can occur during sandbox execution.
     public enum SandboxError: Error {
         /// The specified engine is invalid.
@@ -105,30 +105,30 @@ public struct LibMountSandbox {
         config: SandboxConfig? = nil
     ) throws -> Int32 {
         var enginePtr: UnsafeMutablePointer<sandbox_engine_t>? = nil
-        
+
         let res = engineName.withCString { cEngineName in
             get_sandbox_engine(cEngineName, &enginePtr)
         }
-        
-        guard res == 0, let engine = enginePtr?.pointee else {
+
+        guard res == SANDBOX_SUCCESS, let engine = enginePtr?.pointee else {
             throw SandboxError.invalidEngine(engineName)
         }
-        
+
         if let initFunc = engine.`init` {
             let initRes = initFunc()
-            guard initRes == 0 else {
+            guard initRes == SANDBOX_SUCCESS else {
                 throw SandboxError.initializationFailed(engineName)
             }
         }
-        
+
         defer {
             if let cleanupFunc = engine.cleanup {
-                cleanupFunc()
+                _ = cleanupFunc()
             }
         }
 
         var cConfig = sandbox_config_t()
-        
+
         // We must keep all swift strings alive while C is using their c-string pointers
         var cStrings: [UnsafeMutablePointer<CChar>?] = []
         let retainCString = { (s: String) -> UnsafeMutablePointer<CChar>? in
@@ -136,7 +136,7 @@ public struct LibMountSandbox {
             let cstr = strdup(s)
             return cstr
         }
-        
+
         defer {
             for cstr in cStrings {
                 if let ptr = cstr {
@@ -157,7 +157,7 @@ public struct LibMountSandbox {
                     cMounts.append(sandbox_mount_t(dir: UnsafePointer(ptr), read_only: m.readOnly ? 1 : 0))
                 }
             }
-            
+
             if !cfg.envVars.isEmpty {
                 for env in cfg.envVars {
                     let ptr = retainCString(env)
@@ -165,7 +165,7 @@ public struct LibMountSandbox {
                     cEnvPtrs.append(UnsafePointer(ptr))
                 }
             }
-            
+
             if !cfg.deniedSyscalls.isEmpty {
                 for sc in cfg.deniedSyscalls {
                     let ptr = retainCString(sc)
@@ -173,7 +173,7 @@ public struct LibMountSandbox {
                     cSyscallPtrs.append(UnsafePointer(ptr))
                 }
             }
-            
+
             cConfig.disable_network = cfg.disableNetwork ? 1 : 0
             cConfig.timeout_secs = CUnsignedInt(cfg.timeoutSecs)
             cConfig.max_memory_mb = CUnsignedInt(cfg.maxMemoryMb)
@@ -182,31 +182,31 @@ public struct LibMountSandbox {
             cConfig.target_uid = CUnsignedInt(cfg.targetUid)
             cConfig.target_gid = CUnsignedInt(cfg.targetGid)
         }
-        
+
         var cArgv: [UnsafeMutablePointer<CChar>?] = []
         for arg in commandArgs {
             let ptr = retainCString(arg)
             cStrings.append(ptr)
             cArgv.append(ptr)
         }
-        
+
         return cMounts.withUnsafeBufferPointer { mountsBuf in
             cConfig.mounts = mountsBuf.baseAddress
             cConfig.mount_count = mountsBuf.count
-            
+
             return cEnvPtrs.withUnsafeBufferPointer { envBuf in
                 cConfig.env_vars = UnsafeMutablePointer(mutating: envBuf.baseAddress)
                 cConfig.env_count = envBuf.count
-                
+
                 return cSyscallPtrs.withUnsafeBufferPointer { syscallBuf in
                     cConfig.denied_syscalls = UnsafeMutablePointer(mutating: syscallBuf.baseAddress)
                     cConfig.denied_syscall_count = syscallBuf.count
-                    
+
                     return cArgv.withUnsafeBufferPointer { argvBuf in
                         guard let executeFunc = engine.execute else {
                             return -1
                         }
-                        
+
                         let argvMutable = UnsafeMutablePointer(mutating: argvBuf.baseAddress)
                         return withUnsafePointer(to: &cConfig) { cfgPtr in
                             typealias ExecuteType = @convention(c) (UnsafePointer<sandbox_config_t>?, Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Int32
@@ -214,7 +214,9 @@ public struct LibMountSandbox {
                             if let f = executeAny as? ExecuteType {
                                 return f(cfgPtr, Int32(commandArgs.count), argvMutable)
                             } else {
-                                return executeFunc(cfgPtr, Int32(commandArgs.count), argvMutable)
+                                var exitStatus: Int32 = -1
+                                let execRc = executeFunc(cfgPtr, Int32(commandArgs.count), argvMutable, &exitStatus)
+                                return execRc == SANDBOX_SUCCESS ? exitStatus : -1
                             }
                         }
                     }

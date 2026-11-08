@@ -5,17 +5,17 @@ import * as os from 'os';
 
 function main() {
     console.log("Testing TypeScript FFI Bindings...");
-    
+
     let libName = 'libmountsandbox.so';
     if (os.platform() === 'darwin') {
         libName = 'libmountsandbox.dylib';
     } else if (os.platform() === 'win32') {
         libName = 'mountsandbox.dll';
     }
-    
+
     const libPath = path.resolve(__dirname, "..", "build", libName);
     const sandbox = new LibMountSandbox(libPath);
-    
+
     // Test 1: Dummy engine
     try {
         const statusDummy = sandbox.execute("dummy", ["echo", "test"]);
@@ -27,7 +27,7 @@ function main() {
         console.error("Failed to execute dummy engine:", e.message);
         process.exit(1);
     }
-    
+
     // Test 2: Native engine with stdout capture
     try {
         const outPtr = koffi.alloc('char*', 8);
@@ -62,7 +62,7 @@ function main() {
             throw new Error(`Native engine failed with status ${statusNative}`);
         }
         console.log("Native engine test passed.");
-        
+
         // Actually, decoding string output requires memory free from C side or just ignore memory leak in test
         // To prevent TS complaining, we just log success.
     } catch (e: any) {
