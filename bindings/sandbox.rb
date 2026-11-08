@@ -6,7 +6,7 @@ module LibMountSandbox
 
   # Helper method to dynamically resolve the shared library path based on OS
   def self.resolve_lib_path(custom_path = nil)
-    return custom_path if custom_path && File.exist?(custom_path)
+    return custom_path if custom_path
 
     lib_name = case RbConfig::CONFIG['host_os']
                when /darwin/ then 'libmountsandbox.dylib'

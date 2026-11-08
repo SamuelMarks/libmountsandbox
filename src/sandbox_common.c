@@ -1,6 +1,12 @@
-#if defined(__APPLE__) || defined(__linux__) || defined(__CYGWIN__)
+#if !defined(_WIN32) && !defined(__WATCOMC__)
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 600
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200112L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
 #endif
 #endif
 /**
@@ -35,6 +41,8 @@
 #if defined(_MSC_VER)
 /** @brief Platform spawnvp wrapper for MSVC. */
 #define PLATFORM_SPAWNVP _spawnvp
+/** @brief Platform spawnvp argv cast type for MSVC. */
+#define PLATFORM_SPAWNVP_ARG_T const char *const *
 /** @brief Platform synchronous spawn mode for MSVC. */
 #define PLATFORM_P_WAIT _P_WAIT
 /** @brief Platform asynchronous spawn mode for MSVC. */
@@ -42,6 +50,8 @@
 #else
 /** @brief Platform spawnvp wrapper for non-MSVC Windows compilers. */
 #define PLATFORM_SPAWNVP spawnvp
+/** @brief Platform spawnvp argv cast type for non-MSVC Windows compilers. */
+#define PLATFORM_SPAWNVP_ARG_T char *const *
 /** @brief Platform synchronous spawn mode for non-MSVC Windows compilers. */
 #define PLATFORM_P_WAIT P_WAIT
 /** @brief Platform asynchronous spawn mode for non-MSVC Windows compilers. */
@@ -331,7 +341,7 @@ sandbox_error_t sandbox_spawn_and_wait(const char *bin_name, char **exec_argv,
     if (config->timeout_secs > 0) {
 #ifdef _WIN32
       intptr_t hProcess = PLATFORM_SPAWNVP(PLATFORM_P_NOWAIT, bin_name,
-                                           (const char *const *)exec_argv);
+                                           (PLATFORM_SPAWNVP_ARG_T)exec_argv);
       if (hProcess != -1) {
         if (WaitForSingleObject((HANDLE)hProcess,
                                 config->timeout_secs * 1000) == WAIT_TIMEOUT) {
@@ -347,11 +357,11 @@ sandbox_error_t sandbox_spawn_and_wait(const char *bin_name, char **exec_argv,
       }
 #else
       status = (int)PLATFORM_SPAWNVP(PLATFORM_P_WAIT, bin_name,
-                                     (const char *const *)exec_argv);
+                                     (PLATFORM_SPAWNVP_ARG_T)exec_argv);
 #endif
     } else {
       status = (int)PLATFORM_SPAWNVP(PLATFORM_P_WAIT, bin_name,
-                                     (const char *const *)exec_argv);
+                                     (PLATFORM_SPAWNVP_ARG_T)exec_argv);
     }
 
     if (old_out != -1) {

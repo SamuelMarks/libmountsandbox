@@ -1,3 +1,14 @@
+#if !defined(_WIN32) && !defined(__WATCOMC__)
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 600
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200112L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
+#endif
 /**
  * @file test_sandbox.c
  * @brief C89-compliant unit tests for libmountsandbox using greatest.h and OOM
@@ -31,7 +42,7 @@ extern int g_sandbox_mock_log_fail;
  * @brief Resets all fault-injection globals to their default state.
  * @return SANDBOX_SUCCESS on completion.
  */
-NO_DISCARD static sandbox_error_t reset_mocks(void) {
+static sandbox_error_t reset_mocks(void) {
   g_sandbox_mock_malloc_countdown = 0;
   g_sandbox_mock_tmpfile_countdown = 0;
   g_sandbox_mock_spawn_mode = 0;
@@ -860,8 +871,7 @@ TEST test_appcontainer_and_native_engines(void) {
  * @param value Variable value (or NULL/empty to clear).
  * @return SANDBOX_SUCCESS on completion.
  */
-NO_DISCARD static sandbox_error_t set_test_env(const char *name,
-                                               const char *value) {
+static sandbox_error_t set_test_env(const char *name, const char *value) {
 #if defined(_MSC_VER)
   _putenv_s(name, value ? value : "");
 #elif defined(_WIN32)

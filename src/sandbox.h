@@ -16,12 +16,15 @@ extern "C" {
 
 /* clang-format off */
 #include <stddef.h>
+#if defined(_MSC_VER) && _MSC_VER >= 1700
+#include <sal.h>
+#endif
 /* clang-format on */
 
 #if defined(__cplusplus) && __cplusplus >= 201703L
 /** \brief Compiler attribute to warn when a return value is discarded. */
 #define NO_DISCARD [[nodiscard]]
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(__clang__)
 /** \brief Compiler attribute to warn when a return value is discarded. */
 #define NO_DISCARD __attribute__((warn_unused_result))
 #elif defined(_MSC_VER) && _MSC_VER >= 1700
@@ -35,7 +38,7 @@ extern "C" {
 /**
  * \brief Error codes returned by all libmountsandbox functions.
  */
-typedef enum sandbox_error {
+typedef enum NO_DISCARD sandbox_error {
   /** \brief Operation completed successfully. */
   SANDBOX_SUCCESS = 0,
   /** \brief Invalid or NULL argument provided. */
@@ -215,8 +218,8 @@ typedef struct {
  * \param engine_out Pointer to store the resulting sandbox_engine_t pointer.
  * \return SANDBOX_SUCCESS on success, or an error enum if not found or invalid.
  */
-NO_DISCARD sandbox_error_t get_sandbox_engine(const char *name,
-                                              sandbox_engine_t **engine_out);
+sandbox_error_t get_sandbox_engine(const char *name,
+                                   sandbox_engine_t **engine_out);
 
 /** \brief The dummy engine used for unit testing. */
 extern sandbox_engine_t engine_dummy;

@@ -2,7 +2,7 @@ package sandbox
 
 /*
 #cgo CFLAGS: -I../src
-#cgo LDFLAGS: -L../build -lmountsandbox
+#cgo LDFLAGS: -L../build -lmountsandbox -Wl,-rpath,${SRCDIR}/../build
 #include "sandbox.h"
 #include <stdlib.h>
 

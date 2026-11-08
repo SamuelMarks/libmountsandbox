@@ -1,6 +1,15 @@
 // swift-tools-version: 5.7
 
 import PackageDescription
+import Foundation
+
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let buildDir = URL(fileURLWithPath: packageDir).appendingPathComponent("../../build").standardized.path
+#if os(macOS)
+let dylibPath = "\(buildDir)/libmountsandbox.dylib"
+#else
+let dylibPath = "\(buildDir)/libmountsandbox.so"
+#endif
 
 let package = Package(
     name: "MountSandbox",
@@ -13,7 +22,7 @@ let package = Package(
         .target(
             name: "CMountSandbox",
             linkerSettings: [
-                .unsafeFlags(["-L../../build", "-lmountsandbox", "-Xlinker", "-rpath", "-Xlinker", "../../build"])
+                .unsafeFlags([dylibPath, "-Xlinker", "-rpath", "-Xlinker", buildDir])
             ]
         ),
         .target(

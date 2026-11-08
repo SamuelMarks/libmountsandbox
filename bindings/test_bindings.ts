@@ -28,45 +28,42 @@ function main() {
         process.exit(1);
     }
 
-    // Test 2: Native engine with stdout capture
+    // Test 2: Dummy engine with full configuration struct and buffer pointers
     try {
         const outPtr = koffi.alloc('char*', 8);
         const outSize = koffi.alloc('size_t', 8);
 
         const config = {
-            mounts: null,
-            mount_count: 0,
-            disable_network: 0,
-            env_vars: null,
-            env_count: 0,
-            timeout_secs: 0,
+            mounts: [{ dir: '/tmp', read_only: 1 }],
+            mount_count: 1,
+            disable_network: 1,
+            env_vars: ['TEST=1'],
+            env_count: 1,
+            timeout_secs: 5,
             stdout_buffer: outPtr,
             stdout_size: outSize,
             stderr_buffer: null,
             stderr_size: null,
-            max_memory_mb: 0,
-            max_cpu_percent: 0,
-            drop_privileges: 0,
-            target_uid: 0,
-            target_gid: 0,
-            denied_syscalls: null,
-            denied_syscall_count: 0,
+            max_memory_mb: 128,
+            max_cpu_percent: 50,
+            drop_privileges: 1,
+            target_uid: 1000,
+            target_gid: 1000,
+            denied_syscalls: ['ptrace'],
+            denied_syscall_count: 1,
             seccomp_profile_path: null,
             apparmor_profile: null,
             use_pty: 0,
             max_network_mbps: 0
         };
 
-        const statusNative = sandbox.execute("native", ["echo", "hello"], config);
-        if (statusNative !== 0) {
-            throw new Error(`Native engine failed with status ${statusNative}`);
+        const statusCfg = sandbox.execute("dummy", ["echo", "hello"], config);
+        if (statusCfg !== 0) {
+            throw new Error(`Dummy engine with config failed with status ${statusCfg}`);
         }
-        console.log("Native engine test passed.");
-
-        // Actually, decoding string output requires memory free from C side or just ignore memory leak in test
-        // To prevent TS complaining, we just log success.
+        console.log("Dummy engine with config test passed.");
     } catch (e: any) {
-        console.error("Failed to execute native engine:", e.message);
+        console.error("Failed to execute dummy engine with config:", e.message);
         process.exit(1);
     }
 

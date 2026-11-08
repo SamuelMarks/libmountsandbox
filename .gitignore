@@ -158,6 +158,7 @@ lerna-debug.log*
 *.test
 go.work
 go.work.sum
+!bindings/go.mod
 
 # ------------------------------------------
 # C# / .NET (Bindings)
@@ -185,7 +186,7 @@ Cargo.lock
 # ------------------------------------------
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
+gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
 .kotlin/

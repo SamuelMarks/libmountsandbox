@@ -77,7 +77,7 @@ MOUNTSANDBOX_NO_NETWORK=1
 #include <stdlib.h>
 #include <string.h>
 
-NO_DISCARD static sandbox_error_t run_command(int *out_status) {
+static sandbox_error_t run_command(int *out_status) {
   sandbox_config_t config;
   sandbox_mount_t mounts[1];
   sandbox_engine_t *engine = NULL;

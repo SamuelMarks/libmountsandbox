@@ -6,4 +6,5 @@ fn main() {
     let build_dir = PathBuf::from(manifest_dir).join("../../build");
     println!("cargo:rustc-link-search=native={}", build_dir.display());
     println!("cargo:rustc-link-lib=dylib=mountsandbox");
+    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", build_dir.display());
 }

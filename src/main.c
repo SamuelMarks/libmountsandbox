@@ -18,7 +18,7 @@
 int g_sandbox_mock_print_version_fail = 0;
 #endif
 
-NO_DISCARD static sandbox_error_t print_version(void) {
+static sandbox_error_t print_version(void) {
 #if defined(SANDBOX_ENABLE_MOCKS)
   if (g_sandbox_mock_print_version_fail) {
     return SANDBOX_ERR_IO;
@@ -33,7 +33,7 @@ NO_DISCARD static sandbox_error_t print_version(void) {
  * \param prog_name The name of the program executable.
  * \return SANDBOX_SUCCESS on completion, or SANDBOX_ERR_INVALID_ARG if NULL.
  */
-NO_DISCARD static sandbox_error_t print_usage(const char *prog_name) {
+static sandbox_error_t print_usage(const char *prog_name) {
   if (!prog_name) {
     return SANDBOX_ERR_INVALID_ARG;
   }
@@ -83,8 +83,7 @@ int g_sandbox_mock_getenv_fail = 0;
  * \param out_value Pointer to receive the string value.
  * \return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG on error.
  */
-NO_DISCARD static sandbox_error_t safe_getenv(const char *name,
-                                              const char **out_value) {
+static sandbox_error_t safe_getenv(const char *name, const char **out_value) {
   if (!name || !out_value) {
     return SANDBOX_ERR_INVALID_ARG;
   }
@@ -129,7 +128,7 @@ NO_DISCARD static sandbox_error_t safe_getenv(const char *name,
 int g_sandbox_mock_count_char_fail = 0;
 #endif
 
-NO_DISCARD static sandbox_error_t count_char(const char *s, char c, int *out) {
+static sandbox_error_t count_char(const char *s, char c, int *out) {
   int count = 0;
   if (!out) {
     return SANDBOX_ERR_INVALID_ARG;
@@ -159,7 +158,7 @@ NO_DISCARD static sandbox_error_t count_char(const char *s, char c, int *out) {
  * \param out Pointer to receive the duplicated string.
  * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD static sandbox_error_t my_strdup(const char *s, char **out) {
+static sandbox_error_t my_strdup(const char *s, char **out) {
   sandbox_error_t rc;
   size_t len;
   void *raw_d = NULL;
@@ -192,10 +191,9 @@ NO_DISCARD static sandbox_error_t my_strdup(const char *s, char **out) {
  * \param out_copy Pointer to store the allocated backing buffer for cleanup.
  * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD static sandbox_error_t split_and_append(const char *str, char sep,
-                                                   const char **array,
-                                                   size_t *count,
-                                                   char **out_copy) {
+static sandbox_error_t split_and_append(const char *str, char sep,
+                                        const char **array, size_t *count,
+                                        char **out_copy) {
   sandbox_error_t rc;
   char *copy = NULL;
   char *p;
@@ -234,9 +232,10 @@ NO_DISCARD static sandbox_error_t split_and_append(const char *str, char sep,
  * \param out_copy Pointer to store the allocated backing buffer for cleanup.
  * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD static sandbox_error_t
-split_and_append_mount(const char *str, char sep, int read_only,
-                       sandbox_mount_t *array, size_t *count, char **out_copy) {
+static sandbox_error_t split_and_append_mount(const char *str, char sep,
+                                              int read_only,
+                                              sandbox_mount_t *array,
+                                              size_t *count, char **out_copy) {
   sandbox_error_t rc;
   char *copy = NULL;
   char *p;
@@ -277,8 +276,8 @@ split_and_append_mount(const char *str, char sep, int read_only,
  * \param out_exit_code Pointer to store the resulting process exit code.
  * \return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD static sandbox_error_t sandbox_cli_run(int argc, char **argv,
-                                                  int *out_exit_code) {
+static sandbox_error_t sandbox_cli_run(int argc, char **argv,
+                                       int *out_exit_code) {
   sandbox_error_t rc = SANDBOX_SUCCESS;
   void *raw_ptr = NULL;
   int i;

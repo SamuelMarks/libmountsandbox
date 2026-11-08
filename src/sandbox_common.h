@@ -52,14 +52,14 @@ typedef struct {
  * @param out_ptr Pointer to receive the allocated memory block.
  * @return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD sandbox_error_t sandbox_alloc(size_t size, void **out_ptr);
+sandbox_error_t sandbox_alloc(size_t size, void **out_ptr);
 
 /**
  * @brief Opens a temporary file using standard or MSVC Safe CRT routines.
  * @param out_fp Pointer to receive the opened FILE pointer.
  * @return SANDBOX_SUCCESS on success, or SANDBOX_ERR_IO on failure.
  */
-NO_DISCARD sandbox_error_t sandbox_open_tmpfile(FILE **out_fp);
+sandbox_error_t sandbox_open_tmpfile(FILE **out_fp);
 
 /**
  * @brief Reads all content from a temporary file stream into a dynamically
@@ -69,8 +69,7 @@ NO_DISCARD sandbox_error_t sandbox_open_tmpfile(FILE **out_fp);
  * @param size Optional pointer to receive the number of bytes read.
  * @return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD sandbox_error_t sandbox_read_fp_to_buffer(FILE *fp, char **buf,
-                                                     size_t *size);
+sandbox_error_t sandbox_read_fp_to_buffer(FILE *fp, char **buf, size_t *size);
 
 /**
  * @brief Escapes double quotes and backslashes in a filesystem path for safe
@@ -79,8 +78,8 @@ NO_DISCARD sandbox_error_t sandbox_read_fp_to_buffer(FILE *fp, char **buf,
  * @param out_escaped Pointer to receive the newly allocated escaped string.
  * @return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD sandbox_error_t sandbox_escape_sbpl_path(const char *raw_path,
-                                                    char **out_escaped);
+sandbox_error_t sandbox_escape_sbpl_path(const char *raw_path,
+                                         char **out_escaped);
 
 /**
  * @brief Computes Windows Job Object limit parameters from a sandbox_config_t.
@@ -88,8 +87,8 @@ NO_DISCARD sandbox_error_t sandbox_escape_sbpl_path(const char *raw_path,
  * @param out_limits Pointer to store the computed Job Object limits.
  * @return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG if NULL.
  */
-NO_DISCARD sandbox_error_t sandbox_configure_job_limits(
-    const sandbox_config_t *config, sandbox_job_limits_t *out_limits);
+sandbox_error_t sandbox_configure_job_limits(const sandbox_config_t *config,
+                                             sandbox_job_limits_t *out_limits);
 
 /**
  * @brief Spawns an external binary with arguments, optional stream redirection,
@@ -102,9 +101,10 @@ NO_DISCARD sandbox_error_t sandbox_configure_job_limits(
  * @param exit_status Pointer to receive the process exit status.
  * @return SANDBOX_SUCCESS on success, or an error enum on failure.
  */
-NO_DISCARD sandbox_error_t sandbox_spawn_and_wait(
-    const char *bin_name, char **exec_argv, const sandbox_config_t *config,
-    FILE *out_fp, FILE *err_fp, int *exit_status);
+sandbox_error_t sandbox_spawn_and_wait(const char *bin_name, char **exec_argv,
+                                       const sandbox_config_t *config,
+                                       FILE *out_fp, FILE *err_fp,
+                                       int *exit_status);
 
 #ifdef __cplusplus
 }

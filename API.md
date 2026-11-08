@@ -63,15 +63,15 @@ The Engine abstract vtable (`sandbox.h`).
 ## Functions
 
 ### Public Registry (`sandbox.h`)
-* `NO_DISCARD sandbox_error_t get_sandbox_engine(const char *name, sandbox_engine_t **engine_out)`: Retrieves a pointer to the global engine singleton (`engine_native`, `engine_docker`, `engine_podman`, `engine_gvisor`, `engine_wasmtime`, `engine_appcontainer`, or `engine_dummy`) via `engine_out`.
+* `sandbox_error_t get_sandbox_engine(const char *name, sandbox_engine_t **engine_out)`: Retrieves a pointer to the global engine singleton (`engine_native`, `engine_docker`, `engine_podman`, `engine_gvisor`, `engine_wasmtime`, `engine_appcontainer`, or `engine_dummy`) via `engine_out`.
 
 ### Common & Isolation Helpers (`sandbox_common.h`)
-* `NO_DISCARD sandbox_error_t sandbox_alloc(size_t size, void **out_ptr)`: Allocates heap memory (with OOM fault-injection support when `SANDBOX_ENABLE_MOCKS` is defined).
-* `NO_DISCARD sandbox_error_t sandbox_open_tmpfile(FILE **out_fp)`: Opens a temporary file stream using standard `tmpfile()` or MSVC `tmpfile_s()`.
-* `NO_DISCARD sandbox_error_t sandbox_read_fp_to_buffer(FILE *fp, char **buf, size_t *size)`: Reads all content from a temporary file stream into a dynamically allocated null-terminated buffer.
-* `NO_DISCARD sandbox_error_t sandbox_escape_sbpl_path(const char *raw_path, char **out_escaped)`: Escapes double quotes (`"`) and backslashes in host paths for safe macOS Seatbelt Profile Language (SBPL) inclusion.
-* `NO_DISCARD sandbox_error_t sandbox_configure_job_limits(const sandbox_config_t *config, sandbox_job_limits_t *out_limits)`: Computes Windows Job Object limit parameters from a `sandbox_config_t`.
-* `NO_DISCARD sandbox_error_t sandbox_spawn_and_wait(const char *bin_name, char **exec_argv, const sandbox_config_t *config, FILE *out_fp, FILE *err_fp, int *exit_status)`: Spawns an external binary with arguments, optional stream redirection, resource limits, and timeout enforcement.
+* `sandbox_error_t sandbox_alloc(size_t size, void **out_ptr)`: Allocates heap memory (with OOM fault-injection support when `SANDBOX_ENABLE_MOCKS` is defined).
+* `sandbox_error_t sandbox_open_tmpfile(FILE **out_fp)`: Opens a temporary file stream using standard `tmpfile()` or MSVC `tmpfile_s()`.
+* `sandbox_error_t sandbox_read_fp_to_buffer(FILE *fp, char **buf, size_t *size)`: Reads all content from a temporary file stream into a dynamically allocated null-terminated buffer.
+* `sandbox_error_t sandbox_escape_sbpl_path(const char *raw_path, char **out_escaped)`: Escapes double quotes (`"`) and backslashes in host paths for safe macOS Seatbelt Profile Language (SBPL) inclusion.
+* `sandbox_error_t sandbox_configure_job_limits(const sandbox_config_t *config, sandbox_job_limits_t *out_limits)`: Computes Windows Job Object limit parameters from a `sandbox_config_t`.
+* `sandbox_error_t sandbox_spawn_and_wait(const char *bin_name, char **exec_argv, const sandbox_config_t *config, FILE *out_fp, FILE *err_fp, int *exit_status)`: Spawns an external binary with arguments, optional stream redirection, resource limits, and timeout enforcement.
 
 ### Logging (`log.h`)
-* `NO_DISCARD sandbox_error_t libmountsandbox_log_debug(const char *fmt, ...)`: Outputs a formatted debug log message to `stderr` (also aliased via the `LOG_DEBUG` macro).
+* `sandbox_error_t libmountsandbox_log_debug(const char *fmt, ...)`: Outputs a formatted debug log message to `stderr` (also aliased via the `LOG_DEBUG` macro).

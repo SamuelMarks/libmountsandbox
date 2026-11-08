@@ -66,6 +66,33 @@ namespace MountSandbox
     {
         private const string LibName = "mountsandbox";
 
+        static NativeMethods()
+        {
+            NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, (libraryName, assembly, searchPath) =>
+            {
+                if (libraryName != LibName)
+                {
+                    return IntPtr.Zero;
+                }
+                string fileName = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? "libmountsandbox.dylib"
+                    : RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? "mountsandbox.dll"
+                        : "libmountsandbox.so";
+                var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+                while (dir != null)
+                {
+                    string candidate = System.IO.Path.Combine(dir.FullName, "build", fileName);
+                    if (System.IO.File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out IntPtr handle))
+                    {
+                        return handle;
+                    }
+                    dir = dir.Parent;
+                }
+                return IntPtr.Zero;
+            });
+        }
+
         [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern int get_sandbox_engine(string name, out IntPtr engine_out);
 

@@ -56,6 +56,11 @@ jobs:
         ruby-version: '3.2'
         bundler-cache: false
 
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: current
+
     - name: Build C Library
       run: |
         mkdir build
@@ -77,7 +82,8 @@ jobs:
         DYLD_LIBRARY_PATH: ${{ github.workspace }}/build
       run: |
         cd bindings
-        gem install minitest ffi
+        gem list -i minitest || gem install minitest -v '< 6' --no-document
+        gem install ffi --no-document
         ruby test_ruby.rb
         ruby test_bindings.rb
 
@@ -112,7 +118,7 @@ jobs:
         DYLD_LIBRARY_PATH: ${{ github.workspace }}/build
       run: |
         cd bindings/kotlin
-        ./gradlew test
+        gradle test
 
     - name: Test Rust Bindings
       env:

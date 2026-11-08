@@ -21,7 +21,7 @@ extern "C" {
  * @return SANDBOX_SUCCESS on success, or SANDBOX_ERR_INVALID_ARG if fmt is
  * NULL.
  */
-NO_DISCARD sandbox_error_t libmountsandbox_log_debug(const char *fmt, ...);
+sandbox_error_t libmountsandbox_log_debug(const char *fmt, ...);
 
 #ifndef LOG_DEBUG
 /** \brief Macro to log debug messages via libmountsandbox_log_debug. */
